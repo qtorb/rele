@@ -26,6 +26,6 @@ Electron o integración con LLMs requiere un brief posterior.
 
 ## Previsualización F0
 
-La rama de F0 publica una maqueta estática en GitHub Pages para revisión en
+Una rama auxiliar de GitHub Pages sirve la maqueta estática para revisión en
 navegador. No hay backend, datos reales, autenticación ni despliegue de
 producción.
