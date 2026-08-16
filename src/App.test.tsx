@@ -3,36 +3,51 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
 
-describe('Relé F0.2', () => {
-  it('sincroniza un relevo ejecutable y prepara portada para builder', async () => {
+describe('Relé F0.3 UXM waypoint', () => {
+  it('sincroniza un brief UXM ejecutable como waypoint y prepara pase al builder', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Pega la última salida. Relé te dice dónde estás.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Subirte al AVE en marcha sin perder el mapa.' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Usar ejemplo sintético C13' }))
-    await user.click(screen.getByRole('button', { name: 'Sincronizar' }))
+    await user.click(screen.getByRole('button', { name: 'Ejemplo brief UXM' }))
+    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
 
-    expect(screen.getByRole('heading', { name: 'Ejecutable, con límites' })).toBeInTheDocument()
-    expect(screen.getByText('Origen probable: Producto.')).toBeInTheDocument()
-    expect(screen.getByText('Pegar C13 al builder con portada de control. Mantener gates y no desplegar si el brief lo bloquea.')).toBeInTheDocument()
-    expect(screen.getByText('No desplegar: falta control de turno/árbol limpio.')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Portada para pegar antes del brief' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'C13 · WRITE con gates · ejecutable con límites.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Builder' })).toBeInTheDocument()
+    expect(screen.getByText('No desplegar hasta verificar árbol limpio y turno/gate de despliegue.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Distancia al destino' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Madrigueras detectadas' })).toBeInTheDocument()
+    expect(screen.getByText(/PORTADA PARA BUILDER · C13/)).toBeInTheDocument()
   })
 
-  it('detecta un bloqueo del builder sin convertirlo en WRITE', async () => {
+  it('detecta un bloqueo del builder como waypoint bloqueado, no como WRITE', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: 'Builder' }))
-    await user.type(
-      screen.getByLabelText('Pega aquí el brief, bloqueo o revisión'),
-      'Bloqueo: no puedo confirmar el remoto. No se ha modificado nada. No se ha creado rama ni commit.',
-    )
-    await user.click(screen.getByRole('button', { name: 'Sincronizar' }))
+    await user.click(screen.getByRole('button', { name: 'Ejemplo bloqueo builder' }))
+    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
 
-    expect(screen.getByRole('heading', { name: 'Bloqueado' })).toBeInTheDocument()
-    expect(screen.getByText('No relanzar como WRITE. Resolver el bloqueo o llevarlo a checkpoint.')).toBeInTheDocument()
-    expect(screen.getByText('No reinterpretar el bloqueo como autorización de WRITE.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No detectado · bloqueado antes de WRITE. No relanzar hasta resolver causa.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: CTO / Founder' })).toBeInTheDocument()
+    expect(screen.getByText('El builder no pudo confirmar entorno/repo/estado seguro.')).toBeInTheDocument()
+    expect(screen.getByText(/PARA CTO \/ FOUNDER — READ ONLY/)).toBeInTheDocument()
+  })
+
+  it('detecta una madriguera si el relevo intenta abrir otro frente o desplegar', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(
+      screen.getByLabelText('Brief, salida del builder, revisión o bloqueo'),
+      'Propongo abrir C14 ahora y desplegar ahora en producción para no perder tiempo.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+
+    expect(screen.getByRole('heading', { name: 'C14 · posible salida de ruta. Requiere checkpoint antes de construir.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Founder / Producto' })).toBeInTheDocument()
+    expect(screen.getByText('Abrir C14 u otro frente antes de cerrar el frente vivo.')).toBeInTheDocument()
+    expect(screen.getByText('Desplegar por inercia sin gate explícito.')).toBeInTheDocument()
+    expect(screen.getByText(/PARA PRODUCTO \/ FOUNDER — CHECKPOINT/)).toBeInTheDocument()
   })
 })

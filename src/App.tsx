@@ -1,22 +1,33 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 
-type Source = 'auto' | 'builder' | 'producto' | 'cto' | 'gtm'
-type SyncStatus = 'ejecutable' | 'bloqueado' | 'revision' | 'no-concluyente'
+type Source = 'auto' | 'builder' | 'producto' | 'cto' | 'gtm' | 'founder'
+type WaypointStatus = 'en-ruta' | 'bloqueado' | 'revision' | 'desvio' | 'no-concluyente'
 
-type SyncResult = {
+type ProjectPack = {
+  project: string
+  destination: string
+  currentWaypoint: string
+  method: string[]
+  liveContracts: string[]
+  globalStops: string[]
+}
+
+type WaypointResult = {
   source: string
   front: string
-  destination: string
   phase: string
-  status: SyncStatus
+  status: WaypointStatus
   statusLabel: string
-  now: string
-  facts: string[]
-  stops: string[]
-  contracts: string[]
+  waypoint: string
+  nextSeat: string
+  whatChanged: string[]
+  confirms: string[]
+  blocks: string[]
+  distance: string[]
+  rabbitHoles: string[]
   memoryCandidates: string[]
   notMemory: string[]
-  cover: string
+  handoff: string
 }
 
 const sourceLabels: Record<Source, string> = {
@@ -25,6 +36,29 @@ const sourceLabels: Record<Source, string> = {
   producto: 'Producto',
   cto: 'CTO',
   gtm: 'GTM',
+  founder: 'Founder',
+}
+
+const uxmPack: ProjectPack = {
+  project: 'UXM v3',
+  destination: 'Beta externa con informe usable, sin perder control operativo antes del hito.',
+  currentWaypoint:
+    'Cerrar un frente ejecutable cada vez, con READ ONLY antes de WRITE y sin despliegue si el gate no está explícito.',
+  method: [
+    'READ ONLY diagnostica; WRITE ejecuta solo lo autorizado.',
+    'Un relevo no crea decisión canónica por sí solo.',
+    'Builder implementa; CTO valida límites; producto encuadra; Founder resuelve trade-offs críticos.',
+  ],
+  liveContracts: [
+    'No mezclar refactor técnico con cambio de política.',
+    'No convertir bloqueo del builder en permiso para improvisar.',
+    'No abrir frente nuevo si el frente vivo todavía no tiene veredicto.',
+  ],
+  globalStops: [
+    'STOP si aparece motor/captura/admisión/carril externo fuera de alcance.',
+    'STOP si el relevo pide desplegar sin gate de despliegue.',
+    'STOP si una revisión intenta convertirse en contrato sin aceptación explícita.',
+  ],
 }
 
 const sampleRelay = `# BRIEF C13 · rev.4 · EJECUTABLE
@@ -44,7 +78,7 @@ STOP:
 - Si algo exige tocar captura, admisión o carril externo: PARA y dilo.
 - Si retirar una plantilla rompe un caso no cubierto: PARA y dilo.
 - No se despliega: falta comprobar árbol limpio y turno de despliegue.
-- Un encargo vivo a la vez hasta el 24.
+- Un encargo vivo a la vez hasta el hito.
 
 Entrega:
 - Veredicto.
@@ -52,146 +86,276 @@ Entrega:
 - Tests.
 - MODO_DE_FALLO_NO_PREVISTO.`
 
-const emptyResult: SyncResult = {
+const sampleBuilderBlock = `Bloqueo: no puedo confirmar que el directorio abierto sea el repositorio esperado.
+No se ha creado rama, commit ni push.
+No se ha modificado ningún archivo.
+Me detengo para no escribir en el sitio incorrecto.`
+
+const emptyResult: WaypointResult = {
   source: 'No detectado',
   front: 'No detectado',
-  destination: 'No detectado',
-  phase: 'NO CONCLUYENTE',
+  phase: 'SINCRONIZACIÓN',
   status: 'no-concluyente',
   statusLabel: 'No concluyente',
-  now: 'Falta una salida real que sincronizar.',
-  facts: [],
-  stops: [],
-  contracts: [],
+  waypoint: 'No hay suficiente señal para ubicar el proyecto.',
+  nextSeat: 'Founder',
+  whatChanged: [],
+  confirms: [],
+  blocks: [],
+  distance: [],
+  rabbitHoles: [],
   memoryCandidates: [],
   notMemory: [],
-  cover: '',
+  handoff: '',
 }
 
 function includesAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word.toLowerCase()))
 }
 
-function inferFront(raw: string) {
-  const explicit = raw.match(/\b(?:BRIEF|frente|front)\s+`?([A-Z]\d+|P\d+)`?/i)
+function inferFront(text: string) {
+  const explicit = text.match(/\b(?:BRIEF|frente|front)\s+`?([A-Z]\d+|P\d+)`?/i)
   if (explicit) return explicit[1].toUpperCase()
-  const loose = raw.match(/\b(C\d+|P\d+)\b/i)
+  const loose = text.match(/\b(C\d+|P\d+)\b/i)
   return loose ? loose[1].toUpperCase() : 'No detectado'
 }
 
 function inferSource(raw: string, selected: Source) {
   if (selected !== 'auto') return sourceLabels[selected]
   if (includesAny(raw, ['advisor de producto', 'producto'])) return 'Producto'
-  if (includesAny(raw, ['cto', 'arquitectura'])) return 'CTO'
-  if (includesAny(raw, ['gtm', 'mercado', 'demo'])) return 'GTM'
-  if (includesAny(raw, ['bloqueo:', 'no se ha modificado', 'working tree', 'tests'])) return 'Builder'
+  if (includesAny(raw, ['cto', 'arquitectura', 'adjudica', 'revisor: cto'])) return 'CTO'
+  if (includesAny(raw, ['gtm', 'mercado', 'demo', 'go-to-market'])) return 'GTM'
+  if (includesAny(raw, ['bloqueo:', 'no se ha modificado', 'no se ha creado rama', 'tests', 'commit'])) return 'Builder'
   return 'No detectado'
 }
 
-function analyzeRelay(input: string, selected: Source): SyncResult {
+function unique(items: string[]) {
+  return Array.from(new Set(items))
+}
+
+function buildHandoff(result: Omit<WaypointResult, 'handoff'>, raw: string) {
+  if (result.status === 'bloqueado') {
+    return `PARA CTO / FOUNDER — READ ONLY
+
+Relé detecta bloqueo operativo, no autorización de WRITE.
+
+Estado:
+- Frente: ${result.front}
+- Origen: ${result.source}
+- Fase: ${result.phase}
+
+Bloqueo observado:
+${result.blocks.map((item) => `- ${item}`).join('\n')}
+
+Pregunta:
+- ¿Es bloqueo de entorno, contradicción del brief o falta de gate?
+- ¿El encargo sigue siendo ejecutable?
+- ¿Qué instrucción mínima debe recibir el builder?
+
+No propongas implementación todavía.
+Devuelve causa probable, decisión pendiente si existe y siguiente pase mínimo.`
+  }
+
+  if (result.status === 'desvio') {
+    return `PARA PRODUCTO / FOUNDER — CHECKPOINT
+
+Relé detecta posible madriguera o cambio de scope.
+
+No enviar al builder como WRITE.
+
+Tensión detectada:
+${result.rabbitHoles.map((item) => `- ${item}`).join('\n')}
+
+Decidir:
+- mantener el waypoint actual;
+- aparcar el desvío;
+- o sustituir explícitamente el plan activo.
+
+Salida esperada:
+- veredicto cerrado;
+- si cambia el plan, nuevo waypoint;
+- si no cambia, siguiente pase al asiento correcto.`
+  }
+
+  if (result.status === 'revision') {
+    return `PARA ASIENTO REVISOR — READ ONLY
+
+Revisa este relevo contra el mapa UXM.
+
+No lo conviertas en decisión.
+Declara:
+- qué confirma;
+- qué contradice;
+- qué bloqueo real abre;
+- qué debería llegar al builder, si algo.
+
+Relevo base:
+${raw.slice(0, 900)}${raw.length > 900 ? '\n[...]' : ''}`
+  }
+
+  return `PORTADA PARA BUILDER · ${result.front}
+
+MODO: ${result.phase}
+
+Waypoint sincronizado por Relé:
+- Proyecto: ${uxmPack.project}
+- Destino: ${uxmPack.destination}
+- Origen del relevo: ${result.source}
+- Estado: ${result.statusLabel}
+
+Ejecuta solo el brief adjunto.
+
+Antes de tocar código:
+- Recalcula preflight; no tomes cifras del brief como verdad.
+- Confirma que el trabajo sigue dentro del frente ${result.front}.
+- Si aparece una condición STOP, paras y reportas.
+
+No autorizado:
+- No abrir frentes nuevos.
+- No desplegar salvo gate explícito.
+- No tocar captura/admisión/carril externo salvo autorización literal.
+- No convertir diagnóstico histórico en nuevo alcance.
+
+Entrega:
+- Veredicto.
+- Archivos tocados.
+- Evidencia observada.
+- Tests/gates ejecutados.
+- MODO_DE_FALLO_NO_PREVISTO.`
+}
+
+function analyzeRelay(input: string, selected: Source): WaypointResult {
   const trimmed = input.trim()
   if (!trimmed) return emptyResult
 
   const raw = trimmed.toLowerCase()
   const source = inferSource(raw, selected)
   const front = inferFront(trimmed)
-  const executable = includesAny(raw, ['ejecutable', 'se puede lanzar', 'listo para builder'])
-  const blocked = includesAny(raw, ['bloqueo:', 'bloqueado', 'para y dilo', 'no puedo', 'no se ha modificado'])
-  const reviewedByCto = includesAny(raw, ['revisor: cto', 'cto adjudicado'])
-  const noDeploy = includesAny(raw, ['no se despliega', 'no despliegues', 'railway up'])
+  const executable = includesAny(raw, ['ejecutable', 'se puede lanzar', 'listo para builder', 'puede lanzar'])
+  const hardBlock = includesAny(raw, ['bloqueo:', 'no puedo confirmar', 'me detengo', 'no se ha modificado', 'no se ha creado rama'])
+  const review = includesAny(raw, ['revisor: cto', 'cto adjudicado', 'revisión', 'rev.'])
   const readOnly = includesAny(raw, ['read only', 'diagnóstico', 'preflight'])
+  const noDeploy = includesAny(raw, ['no se despliega', 'no despliegues', 'sin desplegar', 'railway up'])
+  const scopeRisk = includesAny(raw, ['captura', 'admisión', 'carril', 'motor de captura'])
+  const newFrontRisk = includesAny(raw, ['abrir c14', 'c14', 'otro frente', 'nuevo frente'])
+  const corporateRisk = includesAny(raw, ['comité', 'stakeholders', 'roadmap trimestral', 'matriz de riesgos'])
+  const deployRisk = includesAny(raw, ['desplegar ahora', 'railway up', 'producción']) && !noDeploy
   const write = executable || includesAny(raw, ['write', 'ejecuta'])
-
-  const status: SyncStatus = blocked && !executable ? 'bloqueado' : executable ? 'ejecutable' : reviewedByCto ? 'revision' : 'no-concluyente'
   const phase = readOnly && !write ? 'READ ONLY' : write ? 'WRITE con gates' : 'SINCRONIZACIÓN'
-  const destination = executable ? 'Builder' : status === 'bloqueado' ? 'Checkpoint / quien desbloquea' : 'Revisión'
+  const status: WaypointStatus = hardBlock
+    ? 'bloqueado'
+    : newFrontRisk || deployRisk || corporateRisk
+      ? 'desvio'
+      : executable
+        ? 'en-ruta'
+        : review
+          ? 'revision'
+          : 'no-concluyente'
+
   const statusLabel = {
-    ejecutable: 'Ejecutable, con límites',
+    'en-ruta': 'En ruta',
     bloqueado: 'Bloqueado',
-    revision: 'Revisión incorporada',
+    revision: 'Revisión / no canónico',
+    desvio: 'Desvío o madriguera',
     'no-concluyente': 'No concluyente',
   }[status]
 
-  const facts = [
-    source !== 'No detectado' ? `Origen probable: ${source}.` : 'Origen no detectado con seguridad.',
+  const nextSeat = {
+    'en-ruta': 'Builder',
+    bloqueado: 'CTO / Founder',
+    revision: 'Asiento revisor',
+    desvio: 'Founder / Producto',
+    'no-concluyente': 'Founder',
+  }[status]
+
+  const waypoint =
+    status === 'en-ruta'
+      ? `${front} · ${phase} · ejecutable con límites.`
+      : status === 'bloqueado'
+        ? `${front} · bloqueado antes de WRITE. No relanzar hasta resolver causa.`
+        : status === 'desvio'
+          ? `${front} · posible salida de ruta. Requiere checkpoint antes de construir.`
+          : status === 'revision'
+            ? `${front} · revisión útil, pero todavía no es decisión ni WRITE.`
+            : `${front} · señal insuficiente. Falta contexto o gate.`
+
+  const whatChanged = unique([
+    `Origen probable: ${source}.`,
     front !== 'No detectado' ? `Frente detectado: ${front}.` : 'No se detecta frente cerrado.',
-    reviewedByCto ? 'Aparece revisión/adjudicación de CTO.' : 'No aparece revisión de CTO de forma clara.',
-    executable ? 'La salida se presenta como ejecutable.' : 'No se presenta como ejecutable.',
-    noDeploy ? 'Despliegue explícitamente bloqueado.' : 'No se detecta bloqueo explícito de despliegue.',
-  ]
+    executable ? 'El relevo se presenta como ejecutable.' : 'El relevo no se presenta como ejecutable.',
+    review ? 'Aparece revisión/adjudicación previa.' : 'No aparece revisión clara.',
+    noDeploy ? 'El despliegue queda bloqueado explícitamente.' : 'No hay bloqueo de despliegue suficientemente explícito.',
+  ])
 
-  const stops = [
-    ...(includesAny(raw, ['para y dilo', 'stop']) ? ['Si aparece algo fuera del brief: STOP y reportar.'] : []),
-    ...(noDeploy ? ['No desplegar: falta control de turno/árbol limpio.'] : []),
-    ...(includesAny(raw, ['un encargo vivo a la vez']) ? ['Un encargo vivo a la vez hasta cerrar despliegue/reporte.'] : []),
-    ...(includesAny(raw, ['captura', 'admisión', 'carril'])
-      ? ['Si el trabajo exige tocar captura/admisión/carril externo fuera de alcance: STOP.']
-      : []),
-    ...(status === 'bloqueado' ? ['No reinterpretar el bloqueo como autorización de WRITE.'] : []),
-  ]
-
-  const contracts = [
-    ...(includesAny(raw, ['ninguna cifra', 'recomputar']) ? ['Las cifras/nombres citados no son dato de entrada: se recomputan.'] : []),
+  const confirms = unique([
+    ...(executable ? ['Puede avanzar como WRITE con gates si el preflight confirma el contexto.'] : []),
+    ...(readOnly ? ['La pieza conserva la separación READ ONLY antes de WRITE.'] : []),
+    ...(review ? ['Hay señal de revisión previa, pero sigue siendo relevo no canónico.'] : []),
+    ...(noDeploy ? ['No hay permiso de despliegue en este relevo.'] : []),
     ...(includesAny(raw, ['no añade detectores', 'ningún detector']) ? ['No añadir detectores.'] : []),
     ...(includesAny(raw, ['foco ordena']) ? ['El foco ordena; no recorta ni jerarquiza.'] : []),
-    ...(includesAny(raw, ['formulario se nombra', 'texto de botón']) ? ['Los formularios no se nombran por texto de botón.'] : []),
-    ...(noDeploy ? ['El encargo no autoriza despliegue.'] : []),
-  ]
+  ])
 
-  const memoryCandidates = [
-    ...(includesAny(raw, ['un encargo vivo a la vez']) ? ['Un encargo vivo a la vez hasta el 24.'] : []),
-    ...(includesAny(raw, ['foco ordena']) ? ['El foco cambia el orden, no el contenido ni la jerarquía.'] : []),
+  const blocks = unique([
+    ...(hardBlock ? ['El builder no pudo confirmar entorno/repo/estado seguro.'] : []),
+    ...(noDeploy ? ['No desplegar hasta verificar árbol limpio y turno/gate de despliegue.'] : []),
+    ...(scopeRisk ? ['Si exige tocar captura/admisión/carril externo: STOP y checkpoint.'] : []),
+    ...(includesAny(raw, ['para y dilo', 'stop']) ? ['El propio relevo contiene STOP explícito.'] : []),
+  ])
+
+  const distance = unique([
+    status === 'en-ruta'
+      ? `Ejecutar ${front} sin ampliar alcance y recibir veredicto del builder.`
+      : `Cerrar causa de estado ${statusLabel.toLowerCase()} antes de WRITE.`,
+    'Validar evidencia/tests sin convertir diagnóstico en nuevo scope.',
+    'Actualizar waypoint si el builder entrega veredicto o bloqueo nuevo.',
+    'Promocionar a contrato solo lo que cambie una regla viva.',
+  ])
+
+  const rabbitHoles = unique([
+    ...(newFrontRisk ? ['Abrir C14 u otro frente antes de cerrar el frente vivo.'] : []),
+    ...(deployRisk ? ['Desplegar por inercia sin gate explícito.'] : []),
+    ...(scopeRisk ? ['Investigar captura/admisión/carril externo si no bloquea el frente actual.'] : []),
+    ...(corporateRisk ? ['Aplicar playbook corporativo pesado en vez de cierre startup.'] : []),
+    'Reabrir decisiones antiguas porque no aparecen en el último relevo.',
+    'Convertir una revisión CTO/producto en decisión aceptada sin checkpoint.',
+  ])
+
+  const memoryCandidates = unique([
+    ...(includesAny(raw, ['un encargo vivo a la vez']) ? ['Un encargo vivo a la vez hasta el hito.'] : []),
+    ...(includesAny(raw, ['foco ordena']) ? ['El foco cambia orden, no contenido ni jerarquía.'] : []),
     ...(includesAny(raw, ['texto de botón']) ? ['Formulario: usar ubicación/fuente identificadora, no botón de submit.'] : []),
-    ...(includesAny(raw, ['no se despliega', 'railway up']) ? ['Antes de desplegar: verificar árbol limpio y turno de despliegue.'] : []),
-  ]
+    ...(noDeploy ? ['Antes de desplegar: verificar árbol limpio y gate de despliegue.'] : []),
+    ...(scopeRisk ? ['Captura/admisión/carril externo requieren autorización separada.'] : []),
+  ])
 
   const notMemory = [
-    'Justificaciones retóricas del brief.',
-    'Comparaciones contra generalistas que no se conviertan en regla.',
+    'Retórica o tono del brief.',
     'Diagnóstico histórico que no cambia el contrato operativo.',
+    'Una recomendación de rol no aceptada como decisión.',
+    'Detalles de implementación que Git ya conserva mejor que Relé.',
   ]
 
-  const now =
-    status === 'ejecutable'
-      ? `Pegar ${front} al builder con portada de control. Mantener gates y no desplegar si el brief lo bloquea.`
-      : status === 'bloqueado'
-        ? 'No relanzar como WRITE. Resolver el bloqueo o llevarlo a checkpoint.'
-        : 'Pedir revisión acotada antes de construir.'
-
-  const cover = `PORTADA PARA BUILDER · ${front}
-
-Estado sincronizado por Relé:
-- Origen: ${source}
-- Fase: ${phase}
-- Estado: ${statusLabel}
-- Destino: ${destination}
-
-Instrucción:
-- Ejecuta solo lo que esté dentro del brief.
-- Recalcula preflight; no tomes cifras del brief como dato de entrada.
-- No abras frentes nuevos.
-${noDeploy ? '- No despliegues: el relevo bloquea despliegue hasta verificar árbol/turno.\n' : ''}- Si aparece algo fuera del brief: PARA y dilo.
-
-Entrega mínima:
-- Veredicto cerrado.
-- Evidencia observada.
-- Tests/gates ejecutados.
-- MODO_DE_FALLO_NO_PREVISTO.`
-
-  return {
+  const baseResult: Omit<WaypointResult, 'handoff'> = {
     source,
     front,
-    destination,
     phase,
     status,
     statusLabel,
-    now,
-    facts,
-    stops: stops.length ? stops : ['No se detectan STOPs explícitos. Revisar manualmente antes de ejecutar.'],
-    contracts: contracts.length ? contracts : ['No se detectan contratos operativos explícitos.'],
+    waypoint,
+    nextSeat,
+    whatChanged,
+    confirms: confirms.length ? confirms : ['No hay confirmaciones fuertes; tratar como contexto provisional.'],
+    blocks: blocks.length ? blocks : ['No se detecta bloqueo explícito, pero revisar gates antes de ejecutar.'],
+    distance,
+    rabbitHoles,
     memoryCandidates: memoryCandidates.length ? memoryCandidates : ['Sin memoria candidata clara.'],
     notMemory,
-    cover,
+  }
+
+  return {
+    ...baseResult,
+    handoff: buildHandoff(baseResult, trimmed),
   }
 }
 
@@ -215,52 +379,70 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
 export function App() {
   const [source, setSource] = useState<Source>('auto')
   const [relay, setRelay] = useState('')
-  const [result, setResult] = useState<SyncResult | null>(null)
+  const [result, setResult] = useState<WaypointResult | null>(null)
   const [copied, setCopied] = useState('')
 
   const canSync = relay.trim().length > 0
-  const previewResult = useMemo(() => (result ? result : null), [result])
 
   const sync = () => {
     setCopied('')
     setResult(analyzeRelay(relay, source))
   }
 
-  const copyCover = async () => {
-    if (!previewResult?.cover) return
+  const copyHandoff = async () => {
+    if (!result?.handoff) return
     try {
-      await navigator.clipboard.writeText(previewResult.cover)
+      await navigator.clipboard.writeText(result.handoff)
     } catch {
       // La maqueta conserva feedback aunque el navegador bloquee el portapapeles.
     }
-    setCopied('Portada copiada. No se ha enviado nada a ningún modelo.')
+    setCopied('Siguiente pase copiado. Relé no ha enviado nada a ningún asiento.')
   }
 
   return (
     <main className="shell">
       <header className="brand">
         <p className="brand-mark">Relé</p>
-        <p className="brand-note">Maqueta · F0.2</p>
+        <p className="brand-note">Maqueta · F0.3 UXM</p>
       </header>
 
       <section className="hero" aria-labelledby="hero-title">
-        <p className="eyebrow">Sincronizar relevo</p>
-        <h1 id="hero-title">Pega la última salida. Relé te dice dónde estás.</h1>
+        <p className="eyebrow">Waypoint operativo</p>
+        <h1 id="hero-title">Subirte al AVE en marcha sin perder el mapa.</h1>
         <p className="intro">
-          La entrada natural no es elegir un dashboard: es capturar lo último que dijo el builder,
-          producto, CTO o GTM y convertirlo en estado operativo.
+          Pega un brief, revisión o salida del builder. Relé lo compara con el mapa mínimo de UXM y devuelve
+          dónde estás, qué bloquea, qué falta y qué texto pasar al siguiente asiento.
         </p>
+      </section>
+
+      <section className="map-card" aria-labelledby="map-title">
+        <div>
+          <p className="eyebrow">Mapa activo</p>
+          <h2 id="map-title">{uxmPack.project}</h2>
+          <p className="map-copy">{uxmPack.destination}</p>
+        </div>
+        <div className="map-grid">
+          <ListBlock title="Waypoint base" items={[uxmPack.currentWaypoint]} />
+          <ListBlock title="Método" items={uxmPack.method} />
+          <ListBlock title="Contratos vivos" items={uxmPack.liveContracts} />
+          <ListBlock title="STOPs globales" items={uxmPack.globalStops} />
+        </div>
       </section>
 
       <section className="input-card" aria-labelledby="input-title">
         <div className="input-heading">
           <div>
             <p className="eyebrow">Entrada</p>
-            <h2 id="input-title">Último relevo recibido</h2>
+            <h2 id="input-title">Pega lo último que tienes</h2>
           </div>
-          <button className="text-button" type="button" onClick={() => setRelay(sampleRelay)}>
-            Usar ejemplo sintético C13
-          </button>
+          <div className="sample-actions">
+            <button className="text-button" type="button" onClick={() => setRelay(sampleRelay)}>
+              Ejemplo brief UXM
+            </button>
+            <button className="text-button" type="button" onClick={() => setRelay(sampleBuilderBlock)}>
+              Ejemplo bloqueo builder
+            </button>
+          </div>
         </div>
 
         <div className="source-picker" aria-label="Origen declarado">
@@ -277,18 +459,18 @@ export function App() {
           ))}
         </div>
 
-        <label htmlFor="relay">Pega aquí el brief, bloqueo o revisión</label>
+        <label htmlFor="relay">Brief, salida del builder, revisión o bloqueo</label>
         <textarea
           id="relay"
           onChange={(event) => setRelay(event.target.value)}
-          placeholder="Ej.: BRIEF C13 rev.4 ejecutable... STOP... no se despliega..."
-          rows={11}
+          placeholder="Pega aquí la última pieza del proyecto. Relé intentará ubicarte contra el mapa UXM."
+          rows={12}
           value={relay}
         />
 
         <div className="actions">
           <button className="button button-primary" disabled={!canSync} onClick={sync} type="button">
-            Sincronizar
+            Sincronizar waypoint
           </button>
           <button
             className="button button-secondary"
@@ -296,6 +478,7 @@ export function App() {
               setRelay('')
               setResult(null)
               setCopied('')
+              setSource('auto')
             }}
             type="button"
           >
@@ -304,46 +487,56 @@ export function App() {
         </div>
       </section>
 
-      {previewResult && (
-        <section className="result" aria-labelledby="sync-title">
+      {result && (
+        <section className="result" aria-labelledby="waypoint-title">
           <div className="result-header">
             <div>
-              <p className="eyebrow">Sincronización detectada</p>
-              <h2 id="sync-title">{previewResult.statusLabel}</h2>
+              <p className="eyebrow">Waypoint UXM</p>
+              <h2 id="waypoint-title">{result.waypoint}</h2>
             </div>
             <div className="pill-row" aria-label="Resumen detectado">
-              <Pill>{previewResult.front}</Pill>
-              <Pill>{previewResult.phase}</Pill>
-              <Pill>{previewResult.destination}</Pill>
+              <Pill>{result.statusLabel}</Pill>
+              <Pill>{result.front}</Pill>
+              <Pill>{result.nextSeat}</Pill>
             </div>
           </div>
 
           <section className="next-card">
-            <h3>Qué toca ahora</h3>
-            <p>{previewResult.now}</p>
+            <h3>Siguiente pase recomendado: {result.nextSeat}</h3>
+            <p>
+              {result.status === 'en-ruta'
+                ? 'Pasar al builder con portada de control. Mantener gates, no abrir frentes y no desplegar sin permiso literal.'
+                : result.status === 'bloqueado'
+                  ? 'No relanzar como WRITE. Resolver bloqueo o llevarlo a CTO/Founder como READ ONLY.'
+                  : result.status === 'desvio'
+                    ? 'No construir todavía. Convertir en checkpoint y decidir si se aparca o cambia el plan.'
+                    : 'Pedir revisión acotada antes de construir.'}
+            </p>
           </section>
 
           <div className="grid">
-            <ListBlock title="Hechos extraídos" items={previewResult.facts} />
-            <ListBlock title="STOPs / bloqueos" items={previewResult.stops} />
-            <ListBlock title="Contratos del relevo" items={previewResult.contracts} />
-            <ListBlock title="Memoria candidata" items={previewResult.memoryCandidates} />
-            <ListBlock title="No guardar como decisión" items={previewResult.notMemory} />
+            <ListBlock title="Qué cambió con este relevo" items={result.whatChanged} />
+            <ListBlock title="Qué confirma" items={result.confirms} />
+            <ListBlock title="Qué bloquea" items={result.blocks} />
+            <ListBlock title="Distancia al destino" items={result.distance} />
+            <ListBlock title="Madrigueras detectadas" items={result.rabbitHoles} />
+            <ListBlock title="Memoria candidata" items={result.memoryCandidates} />
+            <ListBlock title="No guardar como decisión" items={result.notMemory} />
           </div>
 
-          <section className="cover-card" aria-labelledby="cover-title">
+          <section className="cover-card" aria-labelledby="handoff-title">
             <div className="input-heading">
               <div>
                 <p className="eyebrow">Salida</p>
-                <h3 id="cover-title">Portada para pegar antes del brief</h3>
+                <h3 id="handoff-title">Texto listo para el siguiente asiento</h3>
               </div>
-              <button className="button button-secondary" onClick={copyCover} type="button">
-                Copiar portada
+              <button className="button button-secondary" onClick={copyHandoff} type="button">
+                Copiar siguiente pase
               </button>
             </div>
-            <pre>{previewResult.cover}</pre>
+            <pre>{result.handoff}</pre>
             <p className="feedback" role="status" aria-live="polite">
-              {copied || 'No se ha enviado nada a ningún modelo.'}
+              {copied || 'Relé no envía nada. Solo prepara texto para que tú lo pegues donde toque.'}
             </p>
           </section>
         </section>
