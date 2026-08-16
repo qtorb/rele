@@ -1,12 +1,53 @@
 import { defaultPack, emptyPack } from './defaultPack'
 import type { DisagreementCase, ProjectPack, Signal } from './types'
 
-export const STORAGE_KEY = 'rele.f1.projectPack'
-export const COUNTER_KEY = 'rele.f1.relayCount'
-export const CASES_KEY = 'rele.f1.cases'
+export const STORAGE_KEY = 'rele.pack'
+export const COUNTER_KEY = 'rele.contador'
+export const CASES_KEY = 'rele.casos'
+
+/**
+ * Claves que usó F1 antes del renombrado. Se migran al vuelo la primera vez
+ * que se lee cada una y luego se retiran, para no dejar dos copias divergentes.
+ */
+const LEGACY_KEYS: Record<string, string> = {
+  [STORAGE_KEY]: 'rele.f1.projectPack',
+  [COUNTER_KEY]: 'rele.f1.relayCount',
+  [CASES_KEY]: 'rele.f1.cases',
+}
+
 const EXPORT_KIND = 'rele.project-pack'
 const CASES_EXPORT_KIND = 'rele.disagreement-cases'
 const EXPORT_VERSION = 1
+
+/**
+ * Lee la clave nueva. Si no existe pero sí la vieja, copia el valor a la nueva,
+ * borra la vieja y lo devuelve. Nunca lanza: si localStorage está bloqueado,
+ * la app sigue con sus valores por defecto.
+ */
+function readWithMigration(key: string): string | null {
+  try {
+    const legacyKey = LEGACY_KEYS[key]
+    const current = window.localStorage.getItem(key)
+
+    if (current !== null) {
+      // La clave nueva manda. Si la vieja sigue ahí, se retira para no dejar
+      // dos copias que puedan divergir.
+      if (legacyKey) window.localStorage.removeItem(legacyKey)
+      return current
+    }
+
+    if (!legacyKey) return null
+
+    const legacy = window.localStorage.getItem(legacyKey)
+    if (legacy === null) return null
+
+    window.localStorage.setItem(key, legacy)
+    window.localStorage.removeItem(legacyKey)
+    return legacy
+  } catch {
+    return null
+  }
+}
 
 function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -40,7 +81,7 @@ export function normalizePack(raw: unknown): ProjectPack {
 
 export function loadPack(): ProjectPack {
   try {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
+    const stored = readWithMigration(STORAGE_KEY)
     if (!stored) return { ...defaultPack }
     return normalizePack(JSON.parse(stored))
   } catch {
@@ -65,12 +106,8 @@ export function savePack(pack: ProjectPack) {
 /* --- Contador de caducidad -------------------------------------------- */
 
 export function loadRelayCount(): number {
-  try {
-    const stored = Number(window.localStorage.getItem(COUNTER_KEY))
-    return Number.isFinite(stored) && stored > 0 ? Math.floor(stored) : 0
-  } catch {
-    return 0
-  }
+  const stored = Number(readWithMigration(COUNTER_KEY))
+  return Number.isFinite(stored) && stored > 0 ? Math.floor(stored) : 0
 }
 
 /** Suma un relay analizado y devuelve el valor nuevo. */
@@ -88,7 +125,7 @@ export function bumpRelayCount(): number {
 
 export function loadCases(): DisagreementCase[] {
   try {
-    const stored = window.localStorage.getItem(CASES_KEY)
+    const stored = readWithMigration(CASES_KEY)
     if (!stored) return []
     const parsed: unknown = JSON.parse(stored)
     return Array.isArray(parsed) ? (parsed as DisagreementCase[]) : []

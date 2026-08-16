@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  CASES_KEY,
+  COUNTER_KEY,
+  STORAGE_KEY,
   addCase,
   bumpRelayCount,
   deserializePack,
   loadCases,
+  loadPack,
   loadRelayCount,
   savePack,
   serializeCases,
@@ -67,6 +71,60 @@ describe('corpus de desacuerdo', () => {
       'dos',
       'tres',
     ])
+  })
+})
+
+describe('migración de claves de F1', () => {
+  const LEGACY_PACK = 'rele.f1.projectPack'
+  const LEGACY_COUNTER = 'rele.f1.relayCount'
+  const LEGACY_CASES = 'rele.f1.cases'
+
+  it('migra el pack guardado con la clave vieja y retira la vieja', () => {
+    const legacyPack = { ...defaultPack, project: 'UXM guardado en F1' }
+    window.localStorage.setItem(LEGACY_PACK, JSON.stringify(legacyPack))
+
+    expect(loadPack().project).toBe('UXM guardado en F1')
+
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}').project).toBe('UXM guardado en F1')
+    expect(window.localStorage.getItem(LEGACY_PACK)).toBeNull()
+  })
+
+  it('migra el contador y el corpus', () => {
+    window.localStorage.setItem(LEGACY_COUNTER, '4')
+    window.localStorage.setItem(
+      LEGACY_CASES,
+      JSON.stringify([
+        {
+          id: 'viejo',
+          pastedText: 'texto de F1',
+          rawResponse: '{}',
+          shownSignal: 'EN_RUTA',
+          correctSignal: 'STOP',
+          createdAt: '2026-08-16T10:00:00.000Z',
+        },
+      ]),
+    )
+
+    expect(loadRelayCount()).toBe(4)
+    expect(loadCases()).toHaveLength(1)
+
+    expect(window.localStorage.getItem(COUNTER_KEY)).toBe('4')
+    expect(window.localStorage.getItem(LEGACY_COUNTER)).toBeNull()
+    expect(window.localStorage.getItem(LEGACY_CASES)).toBeNull()
+  })
+
+  it('si ya existe la clave nueva, la vieja no la pisa y se descarta', () => {
+    savePack({ ...defaultPack, project: 'el bueno' })
+    window.localStorage.setItem(LEGACY_PACK, JSON.stringify({ ...defaultPack, project: 'el viejo' }))
+
+    expect(loadPack().project).toBe('el bueno')
+    expect(window.localStorage.getItem(LEGACY_PACK)).toBeNull()
+  })
+
+  it('sin nada guardado devuelve los valores por defecto', () => {
+    expect(loadPack().project).toBe(defaultPack.project)
+    expect(loadRelayCount()).toBe(0)
+    expect(loadCases()).toEqual([])
   })
 })
 

@@ -130,9 +130,14 @@ Relé **degrada al motor determinista y lo dice en pantalla**.
 
 ## Persistencia
 
-`localStorage` en el navegador, con tres claves: `rele.f1.projectPack`,
-`rele.f1.relayCount` y `rele.f1.cases`. Más **Exportar / Importar Project Pack**
-y **Exportar casos** en JSON.
+`localStorage` en el navegador, con tres claves: `rele.pack`, `rele.contador` y
+`rele.casos`. Más **Exportar / Importar Project Pack** y **Exportar casos** en
+JSON.
+
+Las claves de la primera iteración (`rele.f1.projectPack`, `rele.f1.relayCount`,
+`rele.f1.cases`) se migran solas la primera vez que se leen y se retiran, así
+que un Pack guardado antes del renombrado no se pierde. Si por lo que sea
+existen las dos, gana la nueva y la vieja se descarta.
 El importador acepta tanto el sobre exportado por Relé como un Pack pelado, y
 tolera campos ausentes sin romper.
 
