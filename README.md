@@ -1,20 +1,22 @@
-# Relé · F0.1
+# Relé · F0.2
 
-Maqueta clicable para validar una interacción más precisa: convertir una duda
-de proyecto en un encargo operativo usando la gramática real de trabajo:
-`READ ONLY`, `WRITE`, `REVISIÓN` y `CHECKPOINT`.
+Maqueta clicable para validar la entrada natural de Relé: pegar la última
+salida de builder, producto, CTO o GTM y convertirla en estado operativo.
 
-Esta fase usa datos simulados de UXMachine/P9. No lee repositorios, no guarda
+Esta fase usa un caso operativo sintético inspirado en UXMachine. No lee repositorios, no guarda
 datos ni integra modelos. La previsualización web sirve solo para probar si la
 interfaz reduce carga mental; no representa una versión de producto de Relé.
 
-## Qué valida F0.1
+## Qué valida F0.2
 
-- Que Relé arranque por modo de trabajo, no por dashboard de frentes.
-- Que `WRITE` quede bloqueado cuando falta un `READ ONLY` previo.
-- Que una revisión viaje como contexto efímero, no como decisión.
-- Que un checkpoint sirva para cerrar seguir/parar/cambiar de frente.
-- Que los veredictos sean cerrados: `PASA`, `STOP`, `NO CONCLUYENTE`.
+- Que Relé arranque por **captura de relevo**, no por dashboard.
+- Que detecte origen probable, frente, fase, estado y destino.
+- Que separe `STOPs`, contratos, memoria candidata y contexto no canónico.
+- Que prepare una portada para pegar antes de un brief al builder.
+- Que un bloqueo del builder no se reinterprete como autorización de `WRITE`.
+
+El ejemplo C13 incluido es sintético: conserva la forma operativa del caso real
+sin publicar el brief completo en el repo.
 
 ## Ejecutar localmente
 
@@ -30,7 +32,7 @@ npm run test
 npm run build
 ```
 
-F0.1 termina después de validar la maqueta. Cualquier persistencia, Git real,
+F0.2 termina después de validar la maqueta. Cualquier persistencia, Git real,
 Electron, IA o integración con LLMs requiere un brief posterior.
 
 ## Previsualización F0

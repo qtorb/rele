@@ -1,425 +1,353 @@
 import { useMemo, useState } from 'react'
 
-type Mode = 'read' | 'write' | 'review' | 'checkpoint'
-type View = 'home' | 'brief' | 'review' | 'checkpoint' | 'result'
-type Verdict = 'pasa' | 'stop' | 'no-concluyente'
+type Source = 'auto' | 'builder' | 'producto' | 'cto' | 'gtm'
+type SyncStatus = 'ejecutable' | 'bloqueado' | 'revision' | 'no-concluyente'
 
-const modeCopy: Record<Mode, { label: string; eyebrow: string; title: string; body: string; action: string }> = {
-  read: {
-    label: 'READ ONLY',
-    eyebrow: 'Diagnóstico',
-    title: 'Diagnosticar sin tocar nada.',
-    body: 'Úsalo cuando todavía no sabes si se puede escribir. En P9: comprobar una captura fresca antes de cualquier WRITE.',
-    action: 'Preparar encargo READ ONLY',
-  },
-  write: {
-    label: 'WRITE',
-    eyebrow: 'Ejecución',
-    title: 'Ejecutar solo si ya está autorizado.',
-    body: 'En P9 todavía no hay WRITE: falta saber si tipo_contenido se escribe en una captura nueva.',
-    action: 'Ver bloqueo de WRITE',
-  },
-  review: {
-    label: 'REVISIÓN',
-    eyebrow: 'Asiento',
-    title: 'Pedir criterio sin convertirlo en decisión.',
-    body: 'Úsalo cuando Producto, CTO o GTM deben revisar una tensión. La salida no es canónica hasta que se registre.',
-    action: 'Preparar revisión',
-  },
-  checkpoint: {
-    label: 'CHECKPOINT',
-    eyebrow: 'Parada',
-    title: 'Decidir si se sigue, se para o se cambia de frente.',
-    body: 'Úsalo cuando la duda ya no es técnica: hay que cerrar una autorización, un bloqueo o una prioridad.',
-    action: 'Preparar checkpoint',
-  },
+type SyncResult = {
+  source: string
+  front: string
+  destination: string
+  phase: string
+  status: SyncStatus
+  statusLabel: string
+  now: string
+  facts: string[]
+  stops: string[]
+  contracts: string[]
+  memoryCandidates: string[]
+  notMemory: string[]
+  cover: string
 }
 
-const readOnlyBrief = `ENCARGO · READ ONLY · P9
+const sourceLabels: Record<Source, string> = {
+  auto: 'No sé',
+  builder: 'Builder',
+  producto: 'Producto',
+  cto: 'CTO',
+  gtm: 'GTM',
+}
 
-PREFLIGHT
-- No trates ninguna cifra o estado citado como dato de entrada.
-- Recomprueba el estado real antes de concluir.
+const sampleRelay = `# BRIEF C13 · rev.4 · EJECUTABLE
 
-ALCANCE
-- Ejecutar una captura fresca.
-- Comprobar si tipo_contenido se escribe en artefactos nuevos.
-- Reportar evidencia mínima: fecha/corrida, muestra revisada y valor observado.
+Fecha: 2026-08-16 · Autor: advisor de producto · Revisor: CTO adjudicado.
 
-PROHIBIDO
-- No modificar código.
-- No tocar captura, admisión ni rama A.
-- No convertir incertidumbre en autorización de WRITE.
+Ninguna cifra ni nombre de regla de este brief es dato de entrada.
+Todos son afirmaciones a recomputar en el preflight.
 
-GATES
-- PASA: tipo_contenido aparece en la captura fresca con valor útil.
-- STOP: tipo_contenido sigue vacío y P9 no puede funcionar dentro de su alcance.
-- NO CONCLUYENTE: no hay captura fresca o la muestra no permite decidir.
+Qué se hace:
+- C13 corrige presentación del informe.
+- No añade detectores.
+- El foco ordena familias; no recorta ni jerarquiza.
+- El formulario se nombra por dónde está, no por texto de botón.
 
-ENTREGA
-- Veredicto cerrado: PASA / STOP / NO_CONCLUYENTE.
-- Evidencia observada.
+STOP:
+- Si algo exige tocar captura, admisión o carril externo: PARA y dilo.
+- Si retirar una plantilla rompe un caso no cubierto: PARA y dilo.
+- No se despliega: falta comprobar árbol limpio y turno de despliegue.
+- Un encargo vivo a la vez hasta el 24.
+
+Entrega:
+- Veredicto.
+- Evidencia.
+- Tests.
 - MODO_DE_FALLO_NO_PREVISTO.`
 
-const writeBlockedBrief = `BLOQUEO · WRITE · P9
-
-No hay WRITE autorizado.
-
-Motivo:
-- P9 depende de que tipo_contenido exista en artefactos nuevos.
-- Si el campo sigue vacío, escribir P9 sería arreglar el sitio equivocado.
-
-Siguiente movimiento:
-- Volver a READ ONLY.
-- Solo preparar WRITE si el gate de captura fresca devuelve PASA.`
-
-const checkpointBrief = `CHECKPOINT · P9
-
-Decisión a cerrar:
-- ¿P9 sigue dentro de su alcance o se detiene porque el problema pertenece a captura/admisión?
-
-Estados válidos:
-- SEGUIR: hay evidencia fresca y el WRITE queda autorizado en alcance cerrado.
-- PARAR: P9 no puede resolver el bloqueo sin tocar zona prohibida.
-- CAMBIAR FRENTE: el bloqueo real vive en captura/admisión/rama A.
-
-Salida:
-- Veredicto.
-- Motivo.
-- Qué queda explícitamente NO autorizado.`
-
-const verdictCopy: Record<Verdict, { label: string; title: string; body: string; next: string }> = {
-  pasa: {
-    label: 'PASA',
-    title: 'Ahora sí puede nacer un WRITE, pero como otro encargo.',
-    body: 'El READ ONLY ha demostrado que tipo_contenido aparece en una captura fresca.',
-    next: 'Preparar un WRITE cerrado para P9.',
-  },
-  stop: {
-    label: 'STOP',
-    title: 'P9 no continúa.',
-    body: 'Si tipo_contenido sigue vacío, el problema no está en P9: vive en captura/admisión.',
-    next: 'Registrar bloqueo y no tocar P9.',
-  },
-  'no-concluyente': {
-    label: 'NO CONCLUYENTE',
-    title: 'No hay autorización para escribir.',
-    body: 'La incertidumbre no se convierte en permiso. Falta una captura fresca válida o evidencia suficiente.',
-    next: 'Repetir READ ONLY o parar en checkpoint.',
-  },
+const emptyResult: SyncResult = {
+  source: 'No detectado',
+  front: 'No detectado',
+  destination: 'No detectado',
+  phase: 'NO CONCLUYENTE',
+  status: 'no-concluyente',
+  statusLabel: 'No concluyente',
+  now: 'Falta una salida real que sincronizar.',
+  facts: [],
+  stops: [],
+  contracts: [],
+  memoryCandidates: [],
+  notMemory: [],
+  cover: '',
 }
 
-function StageBadge({ children }: { children: string }) {
-  return <span className="stage-badge">{children}</span>
+function includesAny(text: string, words: string[]) {
+  return words.some((word) => text.includes(word.toLowerCase()))
 }
 
-function BackButton({ onClick, label = 'Volver' }: { onClick: () => void; label?: string }) {
+function inferFront(raw: string) {
+  const explicit = raw.match(/\b(?:BRIEF|frente|front)\s+`?([A-Z]\d+|P\d+)`?/i)
+  if (explicit) return explicit[1].toUpperCase()
+  const loose = raw.match(/\b(C\d+|P\d+)\b/i)
+  return loose ? loose[1].toUpperCase() : 'No detectado'
+}
+
+function inferSource(raw: string, selected: Source) {
+  if (selected !== 'auto') return sourceLabels[selected]
+  if (includesAny(raw, ['bloqueo:', 'no se ha modificado', 'working tree', 'tests'])) return 'Builder'
+  if (includesAny(raw, ['advisor de producto', 'producto'])) return 'Producto'
+  if (includesAny(raw, ['cto', 'arquitectura'])) return 'CTO'
+  if (includesAny(raw, ['gtm', 'mercado', 'demo'])) return 'GTM'
+  return 'No detectado'
+}
+
+function analyzeRelay(input: string, selected: Source): SyncResult {
+  const trimmed = input.trim()
+  if (!trimmed) return emptyResult
+
+  const raw = trimmed.toLowerCase()
+  const source = inferSource(raw, selected)
+  const front = inferFront(trimmed)
+  const executable = includesAny(raw, ['ejecutable', 'se puede lanzar', 'listo para builder'])
+  const blocked = includesAny(raw, ['bloqueo:', 'bloqueado', 'para y dilo', 'no puedo', 'no se ha modificado'])
+  const reviewedByCto = includesAny(raw, ['revisor: cto', 'cto adjudicado'])
+  const noDeploy = includesAny(raw, ['no se despliega', 'no despliegues', 'railway up'])
+  const readOnly = includesAny(raw, ['read only', 'diagnóstico', 'preflight'])
+  const write = executable || includesAny(raw, ['write', 'ejecuta'])
+
+  const status: SyncStatus = blocked && !executable ? 'bloqueado' : executable ? 'ejecutable' : reviewedByCto ? 'revision' : 'no-concluyente'
+  const phase = readOnly && !write ? 'READ ONLY' : write ? 'WRITE con gates' : 'SINCRONIZACIÓN'
+  const destination = executable ? 'Builder' : status === 'bloqueado' ? 'Checkpoint / quien desbloquea' : 'Revisión'
+  const statusLabel = {
+    ejecutable: 'Ejecutable, con límites',
+    bloqueado: 'Bloqueado',
+    revision: 'Revisión incorporada',
+    'no-concluyente': 'No concluyente',
+  }[status]
+
+  const facts = [
+    source !== 'No detectado' ? `Origen probable: ${source}.` : 'Origen no detectado con seguridad.',
+    front !== 'No detectado' ? `Frente detectado: ${front}.` : 'No se detecta frente cerrado.',
+    reviewedByCto ? 'Aparece revisión/adjudicación de CTO.' : 'No aparece revisión de CTO de forma clara.',
+    executable ? 'La salida se presenta como ejecutable.' : 'No se presenta como ejecutable.',
+    noDeploy ? 'Despliegue explícitamente bloqueado.' : 'No se detecta bloqueo explícito de despliegue.',
+  ]
+
+  const stops = [
+    ...(includesAny(raw, ['para y dilo', 'stop']) ? ['Si aparece algo fuera del brief: STOP y reportar.'] : []),
+    ...(noDeploy ? ['No desplegar: falta control de turno/árbol limpio.'] : []),
+    ...(includesAny(raw, ['un encargo vivo a la vez']) ? ['Un encargo vivo a la vez hasta cerrar despliegue/reporte.'] : []),
+    ...(includesAny(raw, ['captura', 'admisión', 'carril'])
+      ? ['Si el trabajo exige tocar captura/admisión/carril externo fuera de alcance: STOP.']
+      : []),
+    ...(status === 'bloqueado' ? ['No reinterpretar el bloqueo como autorización de WRITE.'] : []),
+  ]
+
+  const contracts = [
+    ...(includesAny(raw, ['ninguna cifra', 'recomputar']) ? ['Las cifras/nombres citados no son dato de entrada: se recomputan.'] : []),
+    ...(includesAny(raw, ['no añade detectores', 'ningún detector']) ? ['No añadir detectores.'] : []),
+    ...(includesAny(raw, ['foco ordena']) ? ['El foco ordena; no recorta ni jerarquiza.'] : []),
+    ...(includesAny(raw, ['formulario se nombra', 'texto de botón']) ? ['Los formularios no se nombran por texto de botón.'] : []),
+    ...(noDeploy ? ['El encargo no autoriza despliegue.'] : []),
+  ]
+
+  const memoryCandidates = [
+    ...(includesAny(raw, ['un encargo vivo a la vez']) ? ['Un encargo vivo a la vez hasta el 24.'] : []),
+    ...(includesAny(raw, ['foco ordena']) ? ['El foco cambia el orden, no el contenido ni la jerarquía.'] : []),
+    ...(includesAny(raw, ['texto de botón']) ? ['Formulario: usar ubicación/fuente identificadora, no botón de submit.'] : []),
+    ...(includesAny(raw, ['no se despliega', 'railway up']) ? ['Antes de desplegar: verificar árbol limpio y turno de despliegue.'] : []),
+  ]
+
+  const notMemory = [
+    'Justificaciones retóricas del brief.',
+    'Comparaciones contra generalistas que no se conviertan en regla.',
+    'Diagnóstico histórico que no cambia el contrato operativo.',
+  ]
+
+  const now =
+    status === 'ejecutable'
+      ? `Pegar ${front} al builder con portada de control. Mantener gates y no desplegar si el brief lo bloquea.`
+      : status === 'bloqueado'
+        ? 'No relanzar como WRITE. Resolver el bloqueo o llevarlo a checkpoint.'
+        : 'Pedir revisión acotada antes de construir.'
+
+  const cover = `PORTADA PARA BUILDER · ${front}
+
+Estado sincronizado por Relé:
+- Origen: ${source}
+- Fase: ${phase}
+- Estado: ${statusLabel}
+- Destino: ${destination}
+
+Instrucción:
+- Ejecuta solo lo que esté dentro del brief.
+- Recalcula preflight; no tomes cifras del brief como dato de entrada.
+- No abras frentes nuevos.
+${noDeploy ? '- No despliegues: el relevo bloquea despliegue hasta verificar árbol/turno.\n' : ''}- Si aparece algo fuera del brief: PARA y dilo.
+
+Entrega mínima:
+- Veredicto cerrado.
+- Evidencia observada.
+- Tests/gates ejecutados.
+- MODO_DE_FALLO_NO_PREVISTO.`
+
+  return {
+    source,
+    front,
+    destination,
+    phase,
+    status,
+    statusLabel,
+    now,
+    facts,
+    stops: stops.length ? stops : ['No se detectan STOPs explícitos. Revisar manualmente antes de ejecutar.'],
+    contracts: contracts.length ? contracts : ['No se detectan contratos operativos explícitos.'],
+    memoryCandidates: memoryCandidates.length ? memoryCandidates : ['Sin memoria candidata clara.'],
+    notMemory,
+    cover,
+  }
+}
+
+function Pill({ children }: { children: string }) {
+  return <span className="pill">{children}</span>
+}
+
+function ListBlock({ title, items }: { title: string; items: string[] }) {
   return (
-    <button className="button button-secondary" type="button" onClick={onClick}>
-      {label}
-    </button>
+    <section className="block">
+      <h3>{title}</h3>
+      <ul>
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
 export function App() {
-  const [mode, setMode] = useState<Mode>('read')
-  const [view, setView] = useState<View>('home')
-  const [role, setRole] = useState('Producto')
-  const [question, setQuestion] = useState('')
-  const [copied, setCopied] = useState<string | null>(null)
-  const [verdict, setVerdict] = useState<Verdict>('stop')
+  const [source, setSource] = useState<Source>('auto')
+  const [relay, setRelay] = useState('')
+  const [result, setResult] = useState<SyncResult | null>(null)
+  const [copied, setCopied] = useState('')
 
-  const activeMode = modeCopy[mode]
+  const canSync = relay.trim().length > 0
+  const previewResult = useMemo(() => (result ? result : null), [result])
 
-  const reviewBrief = useMemo(
-    () => `REVISIÓN · ${role.toUpperCase()} · P9
+  const sync = () => {
+    setCopied('')
+    setResult(analyzeRelay(relay, source))
+  }
 
-Contexto efímero. No es una decisión.
-
-Pregunta:
-${question.trim() || '[escribe la duda antes de copiar]'}
-
-Memoria operativa:
-- P9 exige READ ONLY previo.
-- No hay WRITE autorizado mientras tipo_contenido no esté comprobado en captura fresca.
-- Captura, admisión y rama A están fuera del alcance de P9.
-
-Salida requerida:
-- Tensiones con decisiones activas.
-- Recomendación no canónica.
-- Veredicto sugerido: seguir / parar / pedir checkpoint.`,
-    [question, role],
-  )
-
-  const copyText = async (text: string, label: string) => {
+  const copyCover = async () => {
+    if (!previewResult?.cover) return
     try {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(previewResult.cover)
     } catch {
-      // La maqueta mantiene feedback aunque el navegador bloquee el portapapeles.
+      // La maqueta conserva feedback aunque el navegador bloquee el portapapeles.
     }
-    setCopied(label)
+    setCopied('Portada copiada. No se ha enviado nada a ningún modelo.')
   }
-
-  const startMode = () => {
-    setCopied(null)
-    if (mode === 'review') {
-      setView('review')
-      return
-    }
-    if (mode === 'checkpoint') {
-      setView('checkpoint')
-      return
-    }
-    setView('brief')
-  }
-
-  if (view === 'home') {
-    return (
-      <main className="shell">
-        <header className="brand">
-          <p className="brand-mark">Relé</p>
-          <p className="brand-note">Maqueta · F0.1</p>
-        </header>
-
-        <section className="hero" aria-labelledby="hero-title">
-          <p className="eyebrow">Sistema de encargo</p>
-          <h1 id="hero-title">Primero el modo. Después el encargo.</h1>
-          <p className="intro">
-            Relé no es otro dashboard: convierte una duda de proyecto en un encargo con fase, límites,
-            gates y salida cerrada.
-          </p>
-        </section>
-
-        <section className="case-card" aria-labelledby="case-title">
-          <div>
-            <p className="eyebrow">Caso de prueba</p>
-            <h2 id="case-title">P9 · tipo_contenido y captura fresca</h2>
-            <p>
-              La situación todavía no autoriza WRITE. Primero hay que saber si el campo se escribe en
-              artefactos nuevos.
-            </p>
-          </div>
-          <StageBadge>WRITE bloqueado</StageBadge>
-        </section>
-
-        <section className="mode-section" aria-labelledby="mode-title">
-          <h2 id="mode-title">¿Qué necesitas preparar?</h2>
-          <div className="mode-grid" role="list" aria-label="Modos de trabajo">
-            {(Object.keys(modeCopy) as Mode[]).map((option) => (
-              <button
-                aria-pressed={mode === option}
-                className={mode === option ? 'mode-card mode-card-selected' : 'mode-card'}
-                key={option}
-                onClick={() => setMode(option)}
-                type="button"
-              >
-                <span>{modeCopy[option].label}</span>
-                <small>{modeCopy[option].eyebrow}</small>
-              </button>
-            ))}
-          </div>
-
-          <article className="mode-detail" aria-live="polite">
-            <StageBadge>{activeMode.label}</StageBadge>
-            <h3>{activeMode.title}</h3>
-            <p>{activeMode.body}</p>
-            <button className="button button-primary" type="button" onClick={startMode}>
-              {activeMode.action}
-            </button>
-          </article>
-        </section>
-      </main>
-    )
-  }
-
-  if (view === 'brief') {
-    const isRead = mode === 'read'
-    const brief = isRead ? readOnlyBrief : writeBlockedBrief
-
-    return (
-      <main className="shell">
-        <header className="compact-header">
-          <button className="text-button" type="button" onClick={() => setView('home')}>
-            Relé
-          </button>
-        </header>
-
-        <section className="panel" aria-labelledby="brief-title">
-          <StageBadge>{isRead ? 'READ ONLY' : 'WRITE bloqueado'}</StageBadge>
-          <h1 id="brief-title">{isRead ? 'P9 necesita diagnóstico, no WRITE.' : 'Todavía no hay WRITE.'}</h1>
-          <p className="lead">
-            {isRead
-              ? 'El encargo fuerza una comprobación observable antes de tocar código.'
-              : 'Relé no prepara ejecución cuando falta el gate previo.'}
-          </p>
-
-          <div className="instruction-box">
-            <pre>{brief}</pre>
-          </div>
-
-          {isRead && (
-            <section className="verdict-strip" aria-label="Qué debe devolver el READ ONLY">
-              <span>PASA</span>
-              <span>STOP</span>
-              <span>NO CONCLUYENTE</span>
-            </section>
-          )}
-
-          <div className="actions">
-            <button className="button button-primary" type="button" onClick={() => copyText(brief, 'encargo')}>
-              {isRead ? 'Copiar encargo READ ONLY' : 'Copiar bloqueo'}
-            </button>
-            {isRead && (
-              <button className="button button-secondary" type="button" onClick={() => setView('result')}>
-                Incorporar veredicto
-              </button>
-            )}
-            <BackButton label="Volver al modo" onClick={() => setView('home')} />
-          </div>
-
-          <p className="feedback" role="status" aria-live="polite">
-            {copied ? `${copied} copiado. No se ha enviado nada a ningún modelo.` : 'No se ha enviado nada a ningún modelo.'}
-          </p>
-        </section>
-      </main>
-    )
-  }
-
-  if (view === 'review') {
-    return (
-      <main className="shell">
-        <header className="compact-header">
-          <button className="text-button" type="button" onClick={() => setView('home')}>
-            Relé
-          </button>
-        </header>
-
-        <section className="panel" aria-labelledby="review-title">
-          <StageBadge>REVISIÓN</StageBadge>
-          <h1 id="review-title">Pedir criterio sin mezclar autoridad.</h1>
-          <p className="lead">La consulta viaja marcada como efímera: no es memoria, no es decisión y no autoriza WRITE.</p>
-
-          <div className="role-picker" aria-label="Asiento de revisión">
-            {['Producto', 'CTO', 'GTM'].map((option) => (
-              <button
-                aria-pressed={role === option}
-                className={role === option ? 'choice choice-selected' : 'choice'}
-                key={option}
-                onClick={() => setRole(option)}
-                type="button"
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-
-          <label htmlFor="question">Duda concreta</label>
-          <textarea
-            id="question"
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ej.: ¿P9 debe parar si tipo_contenido sigue vacío en captura fresca?"
-            rows={4}
-            value={question}
-          />
-
-          <div className="instruction-box">
-            <pre>{reviewBrief}</pre>
-          </div>
-
-          <div className="actions">
-            <button
-              className="button button-primary"
-              disabled={!question.trim()}
-              onClick={() => copyText(reviewBrief, 'consulta')}
-              type="button"
-            >
-              Copiar consulta
-            </button>
-            <BackButton label="Volver al modo" onClick={() => setView('home')} />
-          </div>
-
-          <p className="feedback" role="status" aria-live="polite">
-            {copied ? `${copied} copiada. Sigue siendo no canónica.` : 'No se ha enviado nada a ningún modelo.'}
-          </p>
-        </section>
-      </main>
-    )
-  }
-
-  if (view === 'checkpoint') {
-    return (
-      <main className="shell">
-        <header className="compact-header">
-          <button className="text-button" type="button" onClick={() => setView('home')}>
-            Relé
-          </button>
-        </header>
-
-        <section className="panel" aria-labelledby="checkpoint-title">
-          <StageBadge>CHECKPOINT</StageBadge>
-          <h1 id="checkpoint-title">Cerrar si P9 sigue, se para o cambia de frente.</h1>
-          <p className="lead">Checkpoint no produce. Su función es evitar que una duda operativa se convierta en deriva.</p>
-
-          <div className="instruction-box">
-            <pre>{checkpointBrief}</pre>
-          </div>
-
-          <div className="actions">
-            <button className="button button-primary" type="button" onClick={() => copyText(checkpointBrief, 'checkpoint')}>
-              Copiar checkpoint
-            </button>
-            <BackButton label="Volver al modo" onClick={() => setView('home')} />
-          </div>
-
-          <p className="feedback" role="status" aria-live="polite">
-            {copied ? `${copied} copiado.` : 'No se ha enviado nada a ningún modelo.'}
-          </p>
-        </section>
-      </main>
-    )
-  }
-
-  const currentVerdict = verdictCopy[verdict]
 
   return (
     <main className="shell">
-      <header className="compact-header">
-        <button className="text-button" type="button" onClick={() => setView('brief')}>
-          READ ONLY
-        </button>
+      <header className="brand">
+        <p className="brand-mark">Relé</p>
+        <p className="brand-note">Maqueta · F0.2</p>
       </header>
 
-      <section className="panel" aria-labelledby="result-title">
-        <StageBadge>Veredicto del READ</StageBadge>
-        <h1 id="result-title">Incorporar salida sin perder el gate.</h1>
-        <p className="lead">F0.1 simula qué pasa cuando el builder devuelve un veredicto cerrado.</p>
+      <section className="hero" aria-labelledby="hero-title">
+        <p className="eyebrow">Sincronizar relevo</p>
+        <h1 id="hero-title">Pega la última salida. Relé te dice dónde estás.</h1>
+        <p className="intro">
+          La entrada natural no es elegir un dashboard: es capturar lo último que dijo el builder,
+          producto, CTO o GTM y convertirlo en estado operativo.
+        </p>
+      </section>
 
-        <div className="result-picker" aria-label="Veredicto recibido">
-          {(Object.keys(verdictCopy) as Verdict[]).map((option) => (
+      <section className="input-card" aria-labelledby="input-title">
+        <div className="input-heading">
+          <div>
+            <p className="eyebrow">Entrada</p>
+            <h2 id="input-title">Último relevo recibido</h2>
+          </div>
+          <button className="text-button" type="button" onClick={() => setRelay(sampleRelay)}>
+            Usar ejemplo sintético C13
+          </button>
+        </div>
+
+        <div className="source-picker" aria-label="Origen declarado">
+          {(Object.keys(sourceLabels) as Source[]).map((option) => (
             <button
-              aria-pressed={verdict === option}
-              className={verdict === option ? 'choice choice-selected' : 'choice'}
+              aria-pressed={source === option}
+              className={source === option ? 'choice choice-selected' : 'choice'}
               key={option}
-              onClick={() => setVerdict(option)}
+              onClick={() => setSource(option)}
               type="button"
             >
-              {verdictCopy[option].label}
+              {sourceLabels[option]}
             </button>
           ))}
         </div>
 
-        <section className={verdict === 'stop' ? 'outcome outcome-stop' : 'outcome'} aria-live="polite">
-          <p className="eyebrow">{currentVerdict.label}</p>
-          <h2>{currentVerdict.title}</h2>
-          <p>{currentVerdict.body}</p>
-          <strong>{currentVerdict.next}</strong>
-        </section>
+        <label htmlFor="relay">Pega aquí el brief, bloqueo o revisión</label>
+        <textarea
+          id="relay"
+          onChange={(event) => setRelay(event.target.value)}
+          placeholder="Ej.: BRIEF C13 rev.4 ejecutable... STOP... no se despliega..."
+          rows={11}
+          value={relay}
+        />
 
         <div className="actions">
-          <BackButton label="Volver al encargo" onClick={() => setView('brief')} />
-          <BackButton label="Volver al inicio" onClick={() => setView('home')} />
+          <button className="button button-primary" disabled={!canSync} onClick={sync} type="button">
+            Sincronizar
+          </button>
+          <button
+            className="button button-secondary"
+            onClick={() => {
+              setRelay('')
+              setResult(null)
+              setCopied('')
+            }}
+            type="button"
+          >
+            Limpiar
+          </button>
         </div>
       </section>
+
+      {previewResult && (
+        <section className="result" aria-labelledby="sync-title">
+          <div className="result-header">
+            <div>
+              <p className="eyebrow">Sincronización detectada</p>
+              <h2 id="sync-title">{previewResult.statusLabel}</h2>
+            </div>
+            <div className="pill-row" aria-label="Resumen detectado">
+              <Pill>{previewResult.front}</Pill>
+              <Pill>{previewResult.phase}</Pill>
+              <Pill>{previewResult.destination}</Pill>
+            </div>
+          </div>
+
+          <section className="next-card">
+            <h3>Qué toca ahora</h3>
+            <p>{previewResult.now}</p>
+          </section>
+
+          <div className="grid">
+            <ListBlock title="Hechos extraídos" items={previewResult.facts} />
+            <ListBlock title="STOPs / bloqueos" items={previewResult.stops} />
+            <ListBlock title="Contratos del relevo" items={previewResult.contracts} />
+            <ListBlock title="Memoria candidata" items={previewResult.memoryCandidates} />
+            <ListBlock title="No guardar como decisión" items={previewResult.notMemory} />
+          </div>
+
+          <section className="cover-card" aria-labelledby="cover-title">
+            <div className="input-heading">
+              <div>
+                <p className="eyebrow">Salida</p>
+                <h3 id="cover-title">Portada para pegar antes del brief</h3>
+              </div>
+              <button className="button button-secondary" onClick={copyCover} type="button">
+                Copiar portada
+              </button>
+            </div>
+            <pre>{previewResult.cover}</pre>
+            <p className="feedback" role="status" aria-live="polite">
+              {copied || 'No se ha enviado nada a ningún modelo.'}
+            </p>
+          </section>
+        </section>
+      )}
     </main>
   )
 }

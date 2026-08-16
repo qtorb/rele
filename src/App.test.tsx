@@ -3,46 +3,35 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
 
-describe('Relé F0.1', () => {
-  it('prepara un encargo READ ONLY antes de permitir cualquier WRITE', async () => {
+describe('Relé F0.2', () => {
+  it('sincroniza un relevo ejecutable y prepara portada para builder', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Primero el modo. Después el encargo.' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /READ ONLY/i })[0]).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { name: 'Pega la última salida. Relé te dice dónde estás.' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Preparar encargo READ ONLY' }))
+    await user.click(screen.getByRole('button', { name: 'Usar ejemplo sintético C13' }))
+    await user.click(screen.getByRole('button', { name: 'Sincronizar' }))
 
-    expect(screen.getByRole('heading', { name: 'P9 necesita diagnóstico, no WRITE.' })).toBeInTheDocument()
-    expect(screen.getByText(/No modificar código/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Qué debe devolver el READ ONLY')).toHaveTextContent('NO CONCLUYENTE')
+    expect(screen.getByRole('heading', { name: 'Ejecutable, con límites' })).toBeInTheDocument()
+    expect(screen.getByText('Pegar C13 al builder con portada de control. Mantener gates y no desplegar si el brief lo bloquea.')).toBeInTheDocument()
+    expect(screen.getByText('No desplegar: falta control de turno/árbol limpio.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Portada para pegar antes del brief' })).toBeInTheDocument()
   })
 
-  it('bloquea WRITE cuando no existe el gate previo', async () => {
+  it('detecta un bloqueo del builder sin convertirlo en WRITE', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /WRITE/i }))
-    await user.click(screen.getByRole('button', { name: 'Ver bloqueo de WRITE' }))
+    await user.click(screen.getByRole('button', { name: 'Builder' }))
+    await user.type(
+      screen.getByLabelText('Pega aquí el brief, bloqueo o revisión'),
+      'Bloqueo: no puedo confirmar el remoto. No se ha modificado nada. No se ha creado rama ni commit.',
+    )
+    await user.click(screen.getByRole('button', { name: 'Sincronizar' }))
 
-    expect(screen.getByRole('heading', { name: 'Todavía no hay WRITE.' })).toBeInTheDocument()
-    expect(screen.getByText(/No hay WRITE autorizado/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copiar bloqueo' })).toBeInTheDocument()
-  })
-
-  it('incorpora un STOP sin convertirlo en autorización', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.click(screen.getByRole('button', { name: 'Preparar encargo READ ONLY' }))
-    await user.click(screen.getByRole('button', { name: 'Incorporar veredicto' }))
-
-    expect(screen.getByRole('heading', { name: 'Incorporar salida sin perder el gate.' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'STOP' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('heading', { name: 'P9 no continúa.' })).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'NO CONCLUYENTE' }))
-
-    expect(screen.getByRole('heading', { name: 'No hay autorización para escribir.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Bloqueado' })).toBeInTheDocument()
+    expect(screen.getByText('No relanzar como WRITE. Resolver el bloqueo o llevarlo a checkpoint.')).toBeInTheDocument()
+    expect(screen.getByText('No reinterpretar el bloqueo como autorización de WRITE.')).toBeInTheDocument()
   })
 })
