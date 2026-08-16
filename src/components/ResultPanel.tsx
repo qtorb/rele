@@ -1,5 +1,6 @@
-import { SIGNAL_COPY } from '../lib/signals'
-import type { Analysis } from '../types'
+import { useState } from 'react'
+import { SIGNALS, SIGNAL_COPY } from '../lib/signals'
+import type { Analysis, Signal } from '../types'
 
 function ListBlock({ title, items, empty }: { title: string; items: string[]; empty: string }) {
   return (
@@ -21,19 +22,71 @@ function ListBlock({ title, items, empty }: { title: string; items: string[]; em
 type Props = {
   analysis: Analysis
   copied: string
+  disagreementFeedback: string
   onCopy: () => void
+  onDisagree: (correctSignal: Signal) => void
 }
 
-export function ResultPanel({ analysis, copied, onCopy }: Props) {
+export function ResultPanel({ analysis, copied, disagreementFeedback, onCopy, onDisagree }: Props) {
   const copy = SIGNAL_COPY[analysis.signal]
+  const [openDisagreement, setOpenDisagreement] = useState(false)
 
   return (
     <section className="result" aria-labelledby="signal-title">
       <section className={`signal-card signal-${copy.tone}`} aria-live="polite">
-        <p className="signal-label">{copy.label}</p>
+        <div className="signal-head">
+          <p className="signal-label">{copy.label}</p>
+          <button
+            aria-expanded={openDisagreement}
+            className="text-button"
+            onClick={() => setOpenDisagreement((open) => !open)}
+            type="button"
+          >
+            Esto está mal
+          </button>
+        </div>
+
         <h2 id="signal-title">{copy.title}</h2>
+
+        {analysis.motive && <p className="signal-motive">Motivo: {analysis.motive}</p>}
+
+        {analysis.evidencia ? (
+          <blockquote className="signal-evidence">«{analysis.evidencia}»</blockquote>
+        ) : (
+          <p className="signal-evidence signal-evidence-empty">Sin cita: no hay prueba en el texto pegado.</p>
+        )}
+
         <p className="signal-explanation">{analysis.explanation}</p>
       </section>
+
+      {openDisagreement && (
+        <section className="disagree-card" aria-label="Registrar desacuerdo">
+          <p className="field-hint">
+            ¿Cuál era la señal correcta? Se guarda el texto pegado, la respuesta cruda del motor y tu corrección.
+          </p>
+          <div className="disagree-options">
+            {SIGNALS.map((option) => (
+              <button
+                className="choice"
+                key={option}
+                onClick={() => {
+                  onDisagree(option)
+                  setOpenDisagreement(false)
+                }}
+                type="button"
+              >
+                {SIGNAL_COPY[option].label}
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {disagreementFeedback && (
+        <p className="feedback" role="status" aria-live="polite">
+          {disagreementFeedback}
+        </p>
+      )}
 
       {analysis.engineNote && (
         <p className="degraded-note" role="status">

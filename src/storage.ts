@@ -1,8 +1,11 @@
 import { defaultPack, emptyPack } from './defaultPack'
-import type { ProjectPack } from './types'
+import type { DisagreementCase, ProjectPack, Signal } from './types'
 
 export const STORAGE_KEY = 'rele.f1.projectPack'
+export const COUNTER_KEY = 'rele.f1.relayCount'
+export const CASES_KEY = 'rele.f1.cases'
 const EXPORT_KIND = 'rele.project-pack'
+const CASES_EXPORT_KIND = 'rele.disagreement-cases'
 const EXPORT_VERSION = 1
 
 function asString(value: unknown): string {
@@ -46,12 +49,75 @@ export function loadPack(): ProjectPack {
   }
 }
 
+/**
+ * Guardar el Pack resetea el contador de caducidad. Va acoplado a propósito:
+ * así ningún camino de la app puede actualizar el mapa y olvidarse del contador.
+ */
 export function savePack(pack: ProjectPack) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pack))
+    window.localStorage.setItem(COUNTER_KEY, '0')
   } catch {
     // Sin persistencia el Pack sigue vivo en la sesión; no bloqueamos el trabajo.
   }
+}
+
+/* --- Contador de caducidad -------------------------------------------- */
+
+export function loadRelayCount(): number {
+  try {
+    const stored = Number(window.localStorage.getItem(COUNTER_KEY))
+    return Number.isFinite(stored) && stored > 0 ? Math.floor(stored) : 0
+  } catch {
+    return 0
+  }
+}
+
+/** Suma un relay analizado y devuelve el valor nuevo. */
+export function bumpRelayCount(): number {
+  const next = loadRelayCount() + 1
+  try {
+    window.localStorage.setItem(COUNTER_KEY, String(next))
+  } catch {
+    // El contador vive en memoria durante la sesión aunque no persista.
+  }
+  return next
+}
+
+/* --- Corpus de desacuerdo ---------------------------------------------- */
+
+export function loadCases(): DisagreementCase[] {
+  try {
+    const stored = window.localStorage.getItem(CASES_KEY)
+    if (!stored) return []
+    const parsed: unknown = JSON.parse(stored)
+    return Array.isArray(parsed) ? (parsed as DisagreementCase[]) : []
+  } catch {
+    return []
+  }
+}
+
+export function addCase(input: {
+  pastedText: string
+  rawResponse: string
+  shownSignal: Signal
+  correctSignal: Signal
+}): DisagreementCase[] {
+  const now = new Date()
+  const next: DisagreementCase[] = [
+    ...loadCases(),
+    { ...input, id: `case-${now.getTime()}-${loadCases().length}`, createdAt: now.toISOString() },
+  ]
+  try {
+    window.localStorage.setItem(CASES_KEY, JSON.stringify(next))
+  } catch {
+    // Sin persistencia el caso se pierde al recargar; no bloqueamos el análisis.
+  }
+  return next
+}
+
+export function serializeCases(cases: DisagreementCase[]) {
+  return JSON.stringify({ kind: CASES_EXPORT_KIND, version: EXPORT_VERSION, cases }, null, 2)
 }
 
 export function serializePack(pack: ProjectPack) {

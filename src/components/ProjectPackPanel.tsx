@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { STALE_RELAY_LIMIT } from '../rules/evidence'
 import { PACK_FIELD_LABELS, PACK_LIST_FIELDS, PACK_TEXT_FIELDS } from '../types'
 import type { PackListField, PackTextField, ProjectPack } from '../types'
 
@@ -37,14 +38,28 @@ function formatUpdatedAt(value: string) {
 type Props = {
   pack: ProjectPack
   missing: string[]
+  relayCount: number
+  caseCount: number
   onChange: (pack: ProjectPack) => void
   onExport: () => void
   onImport: (text: string) => void
   onReset: () => void
+  onExportCases: () => void
   feedback: string
 }
 
-export function ProjectPackPanel({ pack, missing, onChange, onExport, onImport, onReset, feedback }: Props) {
+export function ProjectPackPanel({
+  pack,
+  missing,
+  relayCount,
+  caseCount,
+  onChange,
+  onExport,
+  onImport,
+  onReset,
+  onExportCases,
+  feedback,
+}: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
 
   const handleFile = async (file: File | undefined) => {
@@ -69,6 +84,9 @@ export function ProjectPackPanel({ pack, missing, onChange, onExport, onImport, 
           <button className="text-button" type="button" onClick={onReset}>
             Restaurar semilla
           </button>
+          <button className="text-button" type="button" onClick={onExportCases}>
+            Exportar casos ({caseCount})
+          </button>
           <input
             accept="application/json,.json"
             aria-label="Archivo de Project Pack"
@@ -82,6 +100,11 @@ export function ProjectPackPanel({ pack, missing, onChange, onExport, onImport, 
           />
         </div>
       </div>
+
+      <p className={relayCount >= STALE_RELAY_LIMIT ? 'relay-counter relay-counter-stale' : 'relay-counter'}>
+        relays desde la última actualización: <strong>{relayCount}</strong>
+        {relayCount >= STALE_RELAY_LIMIT && ' · el mapa ha caducado, toda señal cae a FALTA MAPA'}
+      </p>
 
       {missing.length > 0 && (
         <p className="pack-warning" role="status">

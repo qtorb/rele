@@ -20,6 +20,43 @@ visible más un handoff copiable.
 5. **Memoria propuesta** — lo que Relé propone actualizar en el Pack. Nada se
    escribe solo; los campos que son decisión piden confirmación reforzada.
 
+## Las dos puertas
+
+Antes de pintar nada, la salida del motor —demo o real— pasa por
+`src/rules/evidence.ts`, un módulo puro sin React y sin red.
+
+**Puerta de evidencia.** El extractor debe devolver `evidencia`: un fragmento
+copiado literalmente de la pieza pegada que justifique la señal.
+
+- Sin cita → `FALTA MAPA`, motivo *señal sin prueba*.
+- Cita que no aparece en el texto pegado (comparando con espacios y saltos
+  normalizados) → `FALTA MAPA`, motivo *cita no verificable*.
+- Respuesta malformada → `FALTA MAPA`, motivo *salida del extractor no válida*.
+  Nunca una excepción.
+
+**Puerta de caducidad.** Relé cuenta los relays analizados desde la última
+actualización del Pack. A partir de 5, toda señal cae a `FALTA MAPA`, diga lo
+que diga el extractor. Editar el Pack o aceptar una propuesta pone el contador
+a 0; el reset está acoplado a `savePack` para que ningún camino de la app pueda
+actualizar el mapa y olvidarse del contador.
+
+**Regla de asimetría, vinculante.** Estas puertas solo pueden degradar. Ninguna
+entrada posible puede producir `EN RUTA` si el motor no dijo `EN RUTA`. Hay un
+test que lo recorre por fuerza bruta sobre señales, citas, textos y contadores.
+
+La cita se muestra siempre en pantalla, entrecomillada, bajo la señal y el
+motivo, antes del resumen.
+
+## Corpus de desacuerdo
+
+Junto a la señal hay un botón `Esto está mal`. Al pulsarlo eliges cuál era la
+señal correcta y Relé guarda en `localStorage` el texto pegado, la respuesta
+cruda del motor —la de antes de degradar—, la señal mostrada, tu corrección y la
+fecha. `Exportar casos` los descarga todos en un `.json`.
+
+No hay UI de lectura del corpus a propósito: es material de entrenamiento y
+diagnóstico, no una bandeja de incidencias.
+
 ## Señales
 
 `EN RUTA` · `GATE PRIMERO` · `STOP` · `BLOQUEADO` · `MADRIGUERA` · `FALTA MAPA` ·
@@ -93,7 +130,9 @@ Relé **degrada al motor determinista y lo dice en pantalla**.
 
 ## Persistencia
 
-`localStorage` en el navegador, más **Exportar / Importar Project Pack** en JSON.
+`localStorage` en el navegador, con tres claves: `rele.f1.projectPack`,
+`rele.f1.relayCount` y `rele.f1.cases`. Más **Exportar / Importar Project Pack**
+y **Exportar casos** en JSON.
 El importador acepta tanto el sobre exportado por Relé como un Pack pelado, y
 tolera campos ausentes sin romper.
 

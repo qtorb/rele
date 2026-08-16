@@ -66,6 +66,12 @@ export type Analysis = {
   rules_detected: string[]
   memory_updates: MemoryUpdate[]
   handoff: string
+  /** Fragmento literal del texto pegado que justifica la señal. Sin esto no hay señal. */
+  evidencia: string
+  /** Motivo de degradación cuando una puerta ha rebajado la señal. */
+  motive: string | null
+  /** Respuesta cruda del motor, serializada. Es lo que se guarda en el corpus. */
+  rawResponse: string
   /** Explicación corta de por qué esta señal. */
   explanation: string
   /** Qué cambia respecto al waypoint actual. */
@@ -78,6 +84,16 @@ export type Analysis = {
   engine: 'demo' | 'real'
   /** Nota de degradación cuando el modo real no pudo completarse. */
   engineNote?: string
+}
+
+/** Un caso en el que el usuario dice que Relé se equivocó. Es el corpus, no una incidencia. */
+export type DisagreementCase = {
+  id: string
+  pastedText: string
+  rawResponse: string
+  shownSignal: Signal
+  correctSignal: Signal
+  createdAt: string
 }
 
 export const PACK_TEXT_FIELDS: PackTextField[] = [

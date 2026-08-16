@@ -7,12 +7,76 @@ import type { Analysis, InputType, MemoryUpdate, PackField, ProjectPack, Signal,
 /** Debajo de esto no hay pieza que analizar, solo una frase suelta. */
 const MIN_INPUT_LENGTH = 25
 
+const HARD_BLOCK = [
+  'bloqueo:',
+  'no puedo confirmar',
+  'me detengo',
+  'no se ha modificado',
+  'no se ha creado rama',
+  'no se ha creado commit',
+  'no puedo continuar',
+]
+
+const REVIEW = [
+  'read only',
+  'asiento revisor',
+  'no convierto nada en decisión',
+  'qué confirma',
+  'qué contradice',
+]
+
+const EXECUTABLE = ['ejecutable', 'listo para builder', 'puede lanzar', 'se puede lanzar', 'write', 'ejecuta solo']
+
+const GATE_CLEARED = [
+  'árbol limpio',
+  'arbol limpio',
+  'gate en verde',
+  'gate pasa',
+  'tests en verde',
+  'preflight ok',
+  'turno de despliegue concedido',
+]
+
+const SCOPE_DRIFT = [
+  'nuevo frente',
+  'otro frente',
+  'abrir c1',
+  'roadmap trimestral',
+  'comité',
+  'matriz de riesgos',
+  'ya que estamos',
+  'aprovechando',
+]
+
+const DEPLOY_PRESSURE = ['desplegar ahora', 'railway up', 'subir a producción', 'deploy ya']
+
+const STOP_ORDER = ['para y reporta', 'reporta y para', 'para y dilo']
+const CONTINUE_ORDER = ['sin esperarme', 'sigue con', 'continúa con', 'continua con']
+const LATERAL = ['no está en el brief', 'no esta en el brief', 'instrucción lateral', 'requisito lateral']
+const TWO_TRUTHS = ['dos fuentes de verdad', 'lista buena']
+const MEANS_VS_ENDS = ['no quede ning', 'no queda ninguna']
+const SELF_DECLARED = ['contradice', 'incompatible', 'se contradicen']
+
 function hasAny(text: string, needles: string[]) {
   return needles.some((needle) => text.includes(needle))
 }
 
 function unique(items: string[]) {
   return Array.from(new Set(items.filter(Boolean)))
+}
+
+/**
+ * Devuelve la línea literal del texto original que disparó la detección.
+ * Es la prueba: si no encontramos una, la puerta de evidencia degradará la
+ * señal, que es exactamente lo que debe pasar.
+ */
+function findEvidenceLine(raw: string, needles: string[]): string {
+  const lines = raw.split('\n')
+  for (const needle of needles) {
+    const hit = lines.find((line) => line.toLowerCase().includes(needle))
+    if (hit && hit.trim()) return hit.trim()
+  }
+  return ''
 }
 
 function detectFronts(raw: string) {
@@ -63,32 +127,41 @@ function detectInputType(text: string, source: Source, hardBlock: boolean, revie
   return 'unknown'
 }
 
+function seal(base: Omit<Analysis, 'handoff' | 'rawResponse'>, pack: ProjectPack): Analysis {
+  const withHandoff = { ...base, rawResponse: '', handoff: buildHandoff({ ...base, rawResponse: '' }, pack) }
+  return { ...withHandoff, rawResponse: JSON.stringify(withHandoff, null, 2) }
+}
+
 function faltaMapa(
   pack: ProjectPack,
   reason: string,
   detail: string[],
   observed: { inputType?: InputType; fronts?: string[] } = {},
 ): Analysis {
-  const base: Omit<Analysis, 'handoff'> = {
-    input_type: observed.inputType ?? 'unknown',
-    signal: 'FALTA_MAPA',
-    project: pack.project || 'sin declarar',
-    front: observed.fronts ?? [],
-    next_seat: SIGNAL_COPY.FALTA_MAPA.seat,
-    can_advance: false,
-    can_start_write: false,
-    blocking_gates: [],
-    contradictions: [],
-    risks: ['Pedir orientación sin mapa devuelve una respuesta que parece criterio y no lo es.'],
-    rules_detected: [],
-    memory_updates: [],
-    explanation: reason,
-    what_changes: [],
-    what_blocks: detail,
-    next_action: 'Completa el Project Pack antes de volver a analizar. Relé no finge criterio.',
-    engine: 'demo',
-  }
-  return { ...base, handoff: buildHandoff(base, pack) }
+  return seal(
+    {
+      input_type: observed.inputType ?? 'unknown',
+      signal: 'FALTA_MAPA',
+      project: pack.project || 'sin declarar',
+      front: observed.fronts ?? [],
+      next_seat: SIGNAL_COPY.FALTA_MAPA.seat,
+      can_advance: false,
+      can_start_write: false,
+      blocking_gates: [],
+      contradictions: [],
+      risks: ['Pedir orientación sin mapa devuelve una respuesta que parece criterio y no lo es.'],
+      rules_detected: [],
+      memory_updates: [],
+      evidencia: '',
+      motive: null,
+      explanation: reason,
+      what_changes: [],
+      what_blocks: detail,
+      next_action: 'Completa el Project Pack antes de volver a analizar. Relé no finge criterio.',
+      engine: 'demo',
+    },
+    pack,
+  )
 }
 
 export function analyzeDemo(input: string, source: Source, pack: ProjectPack): Analysis {
@@ -112,77 +185,44 @@ export function analyzeDemo(input: string, source: Source, pack: ProjectPack): A
   const text = trimmed.toLowerCase()
   const declaredSource = source === 'auto' ? null : SOURCE_LABELS[source]
 
-  const hardBlock = hasAny(text, [
-    'bloqueo:',
-    'no puedo confirmar',
-    'me detengo',
-    'no se ha modificado',
-    'no se ha creado rama',
-    'no se ha creado commit',
-    'no puedo continuar',
-  ])
-
-  const review = hasAny(text, [
-    'read only',
-    'asiento revisor',
-    'no convierto nada en decisión',
-    'qué confirma',
-    'qué contradice',
-  ])
-
-  const executable = hasAny(text, [
-    'ejecutable',
-    'listo para builder',
-    'puede lanzar',
-    'se puede lanzar',
-    'write',
-    'ejecuta solo',
-  ])
-
-  const gateCleared = hasAny(text, [
-    'árbol limpio',
-    'arbol limpio',
-    'gate en verde',
-    'gate pasa',
-    'tests en verde',
-    'preflight ok',
-    'turno de despliegue concedido',
-  ])
-
-  const scopeDrift = hasAny(text, [
-    'nuevo frente',
-    'otro frente',
-    'abrir c1',
-    'roadmap trimestral',
-    'comité',
-    'matriz de riesgos',
-    'ya que estamos',
-    'aprovechando',
-  ])
-
-  const deployPressure =
-    hasAny(text, ['desplegar ahora', 'railway up', 'subir a producción', 'deploy ya']) && !gateCleared
+  const hardBlock = hasAny(text, HARD_BLOCK)
+  const review = hasAny(text, REVIEW)
+  const executable = hasAny(text, EXECUTABLE)
+  const gateCleared = hasAny(text, GATE_CLEARED)
+  const scopeDrift = hasAny(text, SCOPE_DRIFT)
+  const deployPressure = hasAny(text, DEPLOY_PRESSURE) && !gateCleared
 
   // Contradicciones: pares de instrucciones que no pueden cumplirse a la vez.
-  const contradictions: string[] = []
-  if (
-    hasAny(text, ['para y reporta', 'reporta y para', 'para y dilo']) &&
-    hasAny(text, ['sin esperarme', 'sigue con', 'continúa con', 'continua con'])
-  ) {
-    contradictions.push('Hay dos órdenes incompatibles: parar y, a la vez, continuar sin esperar.')
-  }
-  if (hasAny(text, ['no está en el brief', 'no esta en el brief', 'instrucción lateral', 'requisito lateral'])) {
-    contradictions.push('Entra un criterio de aceptación que no pasó por revisión del brief.')
-  }
-  if (hasAny(text, ['dos fuentes de verdad']) || (hasAny(text, ['lista buena']) && hasAny(text, ['gate']))) {
-    contradictions.push('Hay dos fuentes de verdad para el alcance: una cifra fija y lo que salga del gate.')
-  }
-  if (hasAny(text, ['no quede ning', 'no queda ninguna']) && hasAny(text, ['plantilla', 'gate'])) {
-    contradictions.push('Se prescribe el medio interno cuando el contrato real es que pase el gate.')
-  }
-  if (hasAny(text, ['contradice', 'incompatible', 'se contradicen'])) {
-    contradictions.push('La propia pieza declara una contradicción sin resolverla.')
-  }
+  // Cada una arrastra las agujas que la dispararon, para poder citar la prueba.
+  const contradictionChecks = [
+    {
+      fires: hasAny(text, STOP_ORDER) && hasAny(text, CONTINUE_ORDER),
+      label: 'Hay dos órdenes incompatibles: parar y, a la vez, continuar sin esperar.',
+      needles: [...STOP_ORDER, ...CONTINUE_ORDER],
+    },
+    {
+      fires: hasAny(text, LATERAL),
+      label: 'Entra un criterio de aceptación que no pasó por revisión del brief.',
+      needles: LATERAL,
+    },
+    {
+      fires: hasAny(text, ['dos fuentes de verdad']) || (hasAny(text, ['lista buena']) && hasAny(text, ['gate'])),
+      label: 'Hay dos fuentes de verdad para el alcance: una cifra fija y lo que salga del gate.',
+      needles: TWO_TRUTHS,
+    },
+    {
+      fires: hasAny(text, MEANS_VS_ENDS) && hasAny(text, ['plantilla', 'gate']),
+      label: 'Se prescribe el medio interno cuando el contrato real es que pase el gate.',
+      needles: MEANS_VS_ENDS,
+    },
+    {
+      fires: hasAny(text, SELF_DECLARED),
+      label: 'La propia pieza declara una contradicción sin resolverla.',
+      needles: SELF_DECLARED,
+    },
+  ]
+  const firedContradictions = contradictionChecks.filter((check) => check.fires)
+  const contradictions = firedContradictions.map((check) => check.label)
 
   const fronts = detectFronts(trimmed)
   const rulesDetected = detectRules(trimmed)
@@ -210,6 +250,17 @@ export function analyzeDemo(input: string, source: Source, pack: ProjectPack): A
       { inputType, fronts },
     )
   }
+
+  // La prueba: la línea literal que disparó esta señal, no un resumen.
+  const evidenceNeedles: Record<Exclude<Signal, 'FALTA_MAPA'>, string[]> = {
+    BLOQUEADO: HARD_BLOCK,
+    STOP: firedContradictions.flatMap((check) => check.needles),
+    MADRIGUERA: [...SCOPE_DRIFT, ...DEPLOY_PRESSURE],
+    GATE_PRIMERO: EXECUTABLE,
+    EN_RUTA: EXECUTABLE,
+    READ_ONLY: REVIEW,
+  }
+  const evidencia = findEvidenceLine(trimmed, evidenceNeedles[signal])
 
   const canAdvance = signal === 'EN_RUTA'
   const canStartWrite = signal === 'EN_RUTA' && executable
@@ -291,25 +342,28 @@ export function analyzeDemo(input: string, source: Source, pack: ProjectPack): A
     )
   }
 
-  const base: Omit<Analysis, 'handoff'> = {
-    input_type: inputType,
-    signal,
-    project: pack.project,
-    front: fronts,
-    next_seat: nextSeat,
-    can_advance: canAdvance,
-    can_start_write: canStartWrite,
-    blocking_gates: unique(blockingGates),
-    contradictions: unique(contradictions),
-    risks: unique(risks),
-    rules_detected: rulesDetected,
-    memory_updates: memoryUpdates,
-    explanation: explanation[signal],
-    what_changes: unique(whatChanges),
-    what_blocks: unique(whatBlocks),
-    next_action: nextAction[signal],
-    engine: 'demo',
-  }
-
-  return { ...base, handoff: buildHandoff(base, pack) }
+  return seal(
+    {
+      input_type: inputType,
+      signal,
+      project: pack.project,
+      front: fronts,
+      next_seat: nextSeat,
+      can_advance: canAdvance,
+      can_start_write: canStartWrite,
+      blocking_gates: unique(blockingGates),
+      contradictions: unique(contradictions),
+      risks: unique(risks),
+      rules_detected: rulesDetected,
+      memory_updates: memoryUpdates,
+      evidencia,
+      motive: null,
+      explanation: explanation[signal],
+      what_changes: unique(whatChanges),
+      what_blocks: unique(whatBlocks),
+      next_action: nextAction[signal],
+      engine: 'demo',
+    },
+    pack,
+  )
 }

@@ -357,12 +357,76 @@ textarea {
   text-transform: uppercase;
 }
 
+.signal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.signal-motive {
+  margin: 10px 0 0;
+  color: #7a3d05;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.signal-evidence {
+  max-width: 760px;
+  margin: 14px 0 0;
+  border-left: 4px solid #7f8da1;
+  padding: 8px 0 8px 14px;
+  color: #1e2632;
+  font-size: 1.02rem;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.signal-evidence-empty {
+  border-left-color: #b42318;
+  color: #8a2018;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .signal-explanation {
   max-width: 760px;
-  margin: 12px 0 0;
+  margin: 14px 0 0;
   color: #33445a;
   font-size: 1.04rem;
   line-height: 1.5;
+}
+
+.disagree-card {
+  margin-top: 14px;
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fbfcfd;
+}
+
+.disagree-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.relay-counter {
+  margin: 16px 0 0;
+  border: 1px solid #d8dde5;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f7f9fc;
+  color: #38495e;
+  font-size: 0.93rem;
+  line-height: 1.45;
+}
+
+.relay-counter-stale {
+  border-color: #b42318;
+  background: #fff4f2;
+  color: #8a2018;
+  font-weight: 700;
 }
 
 .signal-stop {

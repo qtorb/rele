@@ -83,6 +83,11 @@ export function normalizeAnalysis(raw: unknown, pack: ProjectPack): Analysis {
     risks: strList(item.risks),
     rules_detected: strList(item.rules_detected),
     memory_updates: normalizeMemoryUpdates(item.memory_updates),
+    // La cita se copia tal cual llegó. Verificarla es trabajo de la puerta de
+    // evidencia, no de esta normalización.
+    evidencia: typeof item.evidencia === 'string' ? item.evidencia : '',
+    motive: null,
+    rawResponse: JSON.stringify(raw ?? null, null, 2),
     explanation: str(item.explanation, SIGNAL_COPY[signal].title),
     what_changes: strList(item.what_changes),
     what_blocks: strList(item.what_blocks),

@@ -52,6 +52,7 @@ const SCHEMA = {
     'risks',
     'rules_detected',
     'memory_updates',
+    'evidencia',
     'handoff',
     'explanation',
     'what_changes',
@@ -84,6 +85,7 @@ const SCHEMA = {
         },
       },
     },
+    evidencia: { type: 'string' },
     handoff: { type: 'string' },
     explanation: { type: 'string' },
     what_changes: stringList,
@@ -98,10 +100,22 @@ Lee una pieza de trabajo y conviértela en JSON operativo.
 
 Límites duros:
 - No tomas decisiones de producto. No eliges alcance, no priorizas, no recomiendas estrategia.
-- No inventas contexto. Si algo no está en la pieza ni en el Project Pack, no lo afirmas.
+- **Prohibido inventar contexto.** Si algo no está literalmente en la pieza pegada
+  o en el Project Pack, no lo afirmas, no lo supones y no lo citas.
+- Ante duda entre dos señales, eliges la más restrictiva. **Ante duda, nunca EN_RUTA.**
 - Solo extraes estructura: tipo de pieza, estado, gates, riesgos, contradicciones,
   siguiente asiento, memoria candidata y handoff sugerido.
 - Escribes en español, en el mismo registro operativo que el Project Pack.
+
+El campo evidencia es obligatorio y es la parte más importante de tu salida:
+- Debe ser un fragmento **copiado literalmente** de la pieza pegada, carácter a
+  carácter, que por sí solo justifique la señal que has elegido.
+- No lo parafrasees, no lo resumas, no lo traduzcas, no lo completes.
+- No cites el Project Pack: la cita sale de la pieza pegada.
+- Si no encuentras ningún fragmento literal que justifique la señal, entonces la
+  señal es FALTA_MAPA y evidencia va vacía.
+- Una cita que no aparezca en la pieza pegada hará que tu señal se descarte por
+  completo. Es preferible FALTA_MAPA a una cita aproximada.
 
 Cómo elegir la señal:
 - BLOQUEADO: quien ejecutaba se detuvo antes de escribir. No es permiso de WRITE.
