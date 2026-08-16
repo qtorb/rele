@@ -1,86 +1,129 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { STORAGE_KEY } from './storage'
 
-describe('Relé F0.5 UXM alarm', () => {
-  it('sincroniza un brief UXM ejecutable como waypoint y prepara pase al builder', async () => {
+function pasteInbox(text: string) {
+  fireEvent.change(screen.getByLabelText('Última salida del proyecto'), { target: { value: text } })
+}
+
+beforeEach(() => {
+  window.localStorage.clear()
+  // Sin backend local, Relé debe arrancar en modo demo.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, json: async () => ({ mode: 'demo' }) })),
+  )
+})
+
+describe('Relé F1 · señales', () => {
+  it('marca EN RUTA un brief ejecutable con los gates ya declarados como pasados', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Primero te dice si puedes avanzar. Luego explica por qué.' })).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Probar avance' }))
-    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+    await user.click(screen.getByRole('button', { name: 'Avance' }))
+    await user.click(screen.getByRole('button', { name: 'Analizar' }))
 
     expect(screen.getByRole('heading', { name: 'Puede pasar al siguiente asiento.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'C13 · WRITE con gates · ejecutable con límites.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Builder' })).toBeInTheDocument()
-    expect(screen.getByText('No desplegar hasta verificar árbol limpio y turno/gate de despliegue.')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Distancia al destino' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Madrigueras detectadas' })).toBeInTheDocument()
-    expect(screen.getByText(/PORTADA PARA BUILDER · C13/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Quién tiene la pelota: Builder' })).toBeInTheDocument()
+    expect(screen.getByText('WRITE permitido')).toBeInTheDocument()
+    expect(screen.getByText(/PARA BUILDER — EN RUTA/)).toBeInTheDocument()
   })
 
-  it('declara que no puede orientar si falta el contexto operativo del proyecto', async () => {
+  it('exige GATE PRIMERO cuando la pieza quiere avanzar y hay gates vivos sin declarar superados', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: 'Sin contexto' }))
-    await user.click(screen.getByRole('button', { name: 'Probar avance' }))
-    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+    await user.click(screen.getByRole('button', { name: 'Gate primero' }))
+    await user.click(screen.getByRole('button', { name: 'Analizar' }))
 
-    expect(screen.getByRole('heading', { name: 'Relé no tiene criterio suficiente.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'No sincronizable todavía: carga mapa/status del proyecto antes de analizar.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Founder' })).toBeInTheDocument()
-    expect(screen.getByText('Falta contexto mínimo del proyecto: destino, frente vivo, contratos y STOPs.')).toBeInTheDocument()
-    expect(screen.getByText(/PARA FOUNDER — CARGAR CONTEXTO/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'El gate va antes que el arreglo.' })).toBeInTheDocument()
+    expect(screen.getByText('WRITE no permitido')).toBeInTheDocument()
+    expect(
+      screen.getByText('Hay gates bloqueantes vivos en el Project Pack sin evidencia de que pasen.'),
+    ).toBeInTheDocument()
   })
 
-  it('detecta un bloqueo del builder como waypoint bloqueado, no como WRITE', async () => {
+  it('trata el bloqueo del builder como BLOQUEADO y no como permiso de WRITE', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: 'Probar bloqueo' }))
-    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+    await user.click(screen.getByRole('button', { name: 'Bloqueo' }))
+    await user.click(screen.getByRole('button', { name: 'Analizar' }))
 
     expect(screen.getByRole('heading', { name: 'No relances el WRITE.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'No detectado · bloqueado antes de WRITE. No relanzar hasta resolver causa.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: CTO / Founder' })).toBeInTheDocument()
-    expect(screen.getByText('El builder no pudo confirmar entorno/repo/estado seguro.')).toBeInTheDocument()
-    expect(screen.getByText(/PARA CTO \/ FOUNDER — READ ONLY/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Quién tiene la pelota: CTO / Founder' })).toBeInTheDocument()
+    expect(screen.getByText('El builder no pudo confirmar una condición segura de ejecución.')).toBeInTheDocument()
   })
 
-  it('emite STOP antes de builder cuando detecta contradicciones internas de instrucción', async () => {
+  it('emite STOP cuando la pieza contiene instrucciones incompatibles', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: 'Probar STOP' }))
-    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+    await user.click(screen.getByRole('button', { name: 'STOP' }))
+    await user.click(screen.getByRole('button', { name: 'Analizar' }))
 
     expect(screen.getByRole('heading', { name: 'No pegues esto al builder.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'C13 · STOP antes de builder. Hay contradicciones en la instrucción.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Producto / Founder' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Contradicciones detectadas' })).toBeInTheDocument()
-    expect(screen.getByText('Hay dos órdenes incompatibles: “PARA” y continuar con B/sin esperar.')).toBeInTheDocument()
-    expect(screen.getByText('Reescribir internals de plantillas en vez de validar la salida observable del gate.')).toBeInTheDocument()
-    expect(screen.getByText(/PARA PRODUCTO \/ FOUNDER — CHECKPOINT BREVE/)).toBeInTheDocument()
+    expect(
+      screen.getByText('Hay dos órdenes incompatibles: parar y, a la vez, continuar sin esperar.'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Entra un criterio de aceptación que no pasó por revisión del brief.')).toBeInTheDocument()
   })
 
-  it('detecta una madriguera si el relevo intenta abrir otro frente o desplegar', async () => {
+  it('devuelve FALTA MAPA en vez de fingir criterio si el Project Pack está incompleto', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.type(
-      screen.getByLabelText('Brief, salida del builder, revisión o bloqueo'),
-      'Propongo abrir C14 ahora y desplegar ahora en producción para no perder tiempo.',
-    )
-    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+    await user.clear(screen.getByLabelText('Destino'))
+    await user.click(screen.getByRole('button', { name: 'Avance' }))
+    await user.click(screen.getByRole('button', { name: 'Analizar' }))
 
-    expect(screen.getByRole('heading', { name: 'C14 · posible salida de ruta. Requiere checkpoint antes de construir.' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Founder / Producto' })).toBeInTheDocument()
-    expect(screen.getByText('Abrir C14 u otro frente antes de cerrar el frente vivo.')).toBeInTheDocument()
-    expect(screen.getByText('Desplegar por inercia sin gate explícito.')).toBeInTheDocument()
-    expect(screen.getByText(/PARA PRODUCTO \/ FOUNDER — CHECKPOINT/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Relé no tiene criterio suficiente.' })).toBeInTheDocument()
+    expect(screen.getByText('Faltan campos del Project Pack: destino.')).toBeInTheDocument()
+  })
+})
+
+describe('Relé F1 · memoria', () => {
+  it('no aplica una propuesta crítica sin una segunda confirmación explícita', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    pasteInbox(
+      [
+        'BRIEF C15 · EJECUTABLE',
+        'Árbol limpio verificado y tests en verde.',
+        'No desplegar sin turno explícito de despliegue.',
+        'Ejecuta solo el brief adjunto como WRITE.',
+      ].join('\n'),
+    )
+    await user.click(screen.getByRole('button', { name: 'Analizar' }))
+
+    const rule = 'No desplegar sin turno explícito de despliegue.'
+    const liveRules = () => (screen.getByLabelText('Reglas vivas') as HTMLTextAreaElement).value
+
+    expect(screen.getAllByText(rule).length).toBeGreaterThan(0)
+    expect(screen.getByText('Decisión')).toBeInTheDocument()
+    expect(liveRules()).not.toContain(rule)
+
+    // Primer clic solo arma la confirmación: la regla todavía no entra en el Pack.
+    await user.click(screen.getByRole('button', { name: 'Aplicar…' }))
+    expect(screen.getByText(/Esto cambia una decisión viva del proyecto/)).toBeInTheDocument()
+    expect(liveRules()).not.toContain(rule)
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar cambio de decisión' }))
+    expect(liveRules()).toContain(rule)
+  })
+
+  it('persiste el Project Pack editado en localStorage', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.clear(screen.getByLabelText('Proyecto'))
+    await user.type(screen.getByLabelText('Proyecto'), 'UXM v4')
+
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}')
+    expect(stored.project).toBe('UXM v4')
+    expect(stored.updatedAt).toBeTruthy()
   })
 })

@@ -1,38 +1,118 @@
-# Relé · F0.5 UXM
+# Relé · F1 UXM
 
-Relé es un **plugin de proyecto con memoria operativa versionable**. Esta fase
-usa UXM como primer proyecto real de validación: no intenta gestionar todo el
-proyecto, sino ayudarte a recuperar el mapa cuando cambias de sesión, rol,
-modelo o brief.
+Relé es un **plugin de proyecto con memoria operativa activa y versionable**. F1 lo
+convierte de maqueta en app local útil: una sola pantalla que guarda un Project
+Pack, recibe la última salida del proyecto, la analiza y devuelve una señal
+visible más un handoff copiable.
 
-F0.5 valida el gesto central corregido:
+> F1 no coordina todo el sistema. F1 evita que pierdas el siguiente paso.
 
-> Pegar la última salida y recibir una señal visible antes de leer el detalle.
+## La pantalla
 
-La maqueta usa un mapa UXM mínimo y casos sintéticos. No lee repositorios, no
-guarda datos, no integra modelos y no publica briefs reales completos. Si falta
-mapa/status del proyecto, Relé no finge criterio: devuelve `Sin contexto
-operativo`.
+1. **Project Pack UXM** — editable y persistente en local. Campos: proyecto,
+   destino, waypoint actual, siguiente asiento, gates bloqueantes, reglas vivas,
+   riesgos vivos, aparcado y última actualización.
+2. **Inbox** — pega la última pieza y, opcionalmente, declara el origen
+   (auto, builder, producto, CTO, GTM, founder).
+3. **Analizar** — la acción principal, no escondida entre controles secundarios.
+4. **Resultado** — señal grande arriba, explicación corta, qué cambia, qué
+   bloquea, quién tiene la pelota, qué hacer ahora y handoff listo para copiar.
+5. **Memoria propuesta** — lo que Relé propone actualizar en el Pack. Nada se
+   escribe solo; los campos que son decisión piden confirmación reforzada.
 
-La lectura de repositorio/GitHub queda fuera de F0.4. Cuando exista, debe ser
-una capa de evidencia puntual —rama, PR, archivos tocados, tests, commits—, no
-la fuente principal de orientación. El sentido operativo vive en el Project
-Pack, el waypoint y los relevos pegados.
+## Señales
 
-## Qué valida F0.5
+`EN RUTA` · `GATE PRIMERO` · `STOP` · `BLOQUEADO` · `MADRIGUERA` · `FALTA MAPA` ·
+`READ ONLY / NO CANÓNICO`
 
-- Que Relé arranque como alarma de proyecto, no como dashboard.
-- Que la primera salida sea una señal visible: `STOP`, `BLOQUEADO`,
-  `MADRIGUERA`, `FALTA MAPA`, `READ ONLY` o `EN RUTA`.
-- Que use dos entradas explícitas: mapa/status del proyecto + último relevo.
-- Que compare un relevo contra un mapa mínimo del proyecto.
-- Que distinga avance, `STOP` antes de builder, bloqueo, revisión no canónica y
-  madriguera.
-- Que detecte contradicciones de bajo nivel, como `PARA` vs `sigue con B` o
-  prescribir internals cuando el contrato real es pasar un gate.
-- Que muestre distancia al destino y no solo estado técnico.
-- Que prepare texto para el siguiente asiento sin enviarlo automáticamente.
-- Que el bloqueo del builder no se convierta en permiso de `WRITE`.
+Reglas de coherencia que Relé no deja romper, venga la señal de donde venga:
+
+- Solo `EN RUTA` puede autorizar avance o WRITE.
+- Sin Project Pack mínimo (proyecto, destino, waypoint) la respuesta es
+  `FALTA MAPA`. Relé no finge criterio.
+- Ante duda entre dos señales, gana la más restrictiva.
+
+## Ejecutar
+
+```bash
+npm install
+npm run dev
+```
+
+`npm run dev` levanta las dos piezas a la vez: el frontend Vite (`:5173`) y el
+backend local (`:8787`). Vite hace proxy de `/api` al backend, así que el
+frontend nunca habla con ninguna API externa.
+
+Para levantarlas por separado:
+
+```bash
+npm run dev:web
+```
+
+```bash
+npm run dev:api
+```
+
+## Modo demo y modo real
+
+**Modo demo (por defecto).** Sin API key, Relé analiza con reglas deterministas
+y ejemplos sintéticos. Funciona entero: señales, handoff y memoria propuesta.
+
+**Modo real.** Copia `.env.local.example` a `.env.local` y pon tu clave:
+
+```bash
+cp .env.local.example .env.local
+```
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Reinicia `npm run dev:api`. El badge del Inbox pasa a `MODO REAL`.
+Para desactivarlo, borra la clave o el archivo y reinicia el backend.
+
+Variables opcionales: `RELE_MODEL` (por defecto `claude-opus-5`) y `RELE_PORT`
+(por defecto `8787`).
+
+### Qué hace y qué no hace el LLM
+
+El LLM **no decide**. Solo extrae estructura operativa a un JSON con contrato
+fijo (`server/extractor.js`): tipo de pieza, señal, gates, contradicciones,
+riesgos, reglas, siguiente asiento, memoria candidata y handoff.
+
+Al volver al frontend, esa salida se normaliza: los campos fuera de dominio caen
+a valores seguros y la coherencia dura se reimpone en código, no se confía al
+modelo. Si el backend no responde, devuelve algo ilegible o el modelo declina,
+Relé **degrada al motor determinista y lo dice en pantalla**.
+
+### Seguridad de la clave
+
+- La clave vive solo en `.env.local`, que está en `.gitignore`.
+- Solo la lee el backend (`server/`). Nunca se expone al frontend ni al bundle.
+- No hay claves hardcodeadas en el repo.
+
+## Persistencia
+
+`localStorage` en el navegador, más **Exportar / Importar Project Pack** en JSON.
+El importador acepta tanto el sobre exportado por Relé como un Pack pelado, y
+tolera campos ausentes sin romper.
+
+## Validar
+
+```bash
+npm run test
+```
+
+```bash
+npm run build
+```
+
+## Fuera de alcance en F1
+
+No se escribe en `.rele/`, no hay Git real y no se lee el repositorio. Cuando la
+lectura de repo/GitHub llegue, será una capa de **evidencia puntual** —rama, PR,
+archivos tocados, commits, tests—, no la fuente principal de orientación. El
+sentido operativo vive en el Project Pack, el waypoint y las piezas pegadas.
 
 ## Arquitectura conceptual
 
@@ -41,35 +121,10 @@ qtorb/rele
   software/app de Relé
 
 cada-proyecto/.rele/
-  memoria operativa versionable del proyecto
+  memoria operativa versionable del proyecto (todavía no implementado)
 ```
-
-Comparación guía:
 
 ```text
 .git/   guarda historia técnica
 .rele/  guarda mapa operativo
 ```
-
-## Ejecutar localmente
-
-```bash
-npm install
-npm run dev
-```
-
-## Validar
-
-```bash
-npm run test
-npm run build
-```
-
-F0.5 termina después de validar la maqueta. Persistencia `.rele/`, Git real,
-Electron, IA o integración con LLMs requieren un brief posterior.
-
-## Previsualización F0
-
-Una rama auxiliar de GitHub Pages sirve la maqueta estática para revisión en
-navegador. No hay backend, datos reales, autenticación ni despliegue de
-producción.
