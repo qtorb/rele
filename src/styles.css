@@ -138,7 +138,7 @@ h3 {
 
 .map-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 12px;
   margin-top: 22px;
 }
@@ -168,11 +168,25 @@ h3 {
   text-underline-offset: 4px;
 }
 
-.source-picker {
+.source-picker,
+.context-toggle {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin: 24px 0;
+}
+
+.context-toggle {
+  align-items: center;
+  border: 1px solid #d8dde5;
+  border-radius: 14px;
+  padding: 14px;
+  background: #f9fbfe;
+}
+
+.context-toggle span {
+  color: #29384a;
+  font-weight: 800;
 }
 
 .choice {

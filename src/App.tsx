@@ -1,12 +1,13 @@
 import { useState } from 'react'
 
 type Source = 'auto' | 'builder' | 'producto' | 'cto' | 'gtm' | 'founder'
-type WaypointStatus = 'en-ruta' | 'bloqueado' | 'revision' | 'desvio' | 'no-concluyente'
+type WaypointStatus = 'en-ruta' | 'stop' | 'bloqueado' | 'revision' | 'desvio' | 'no-concluyente'
 
 type ProjectPack = {
   project: string
   destination: string
   currentWaypoint: string
+  lastStatus: string
   method: string[]
   liveContracts: string[]
   globalStops: string[]
@@ -19,8 +20,10 @@ type WaypointResult = {
   status: WaypointStatus
   statusLabel: string
   waypoint: string
+  contextHealth: string
   nextSeat: string
   whatChanged: string[]
+  contradictions: string[]
   confirms: string[]
   blocks: string[]
   distance: string[]
@@ -44,6 +47,8 @@ const uxmPack: ProjectPack = {
   destination: 'Beta externa con informe usable, sin perder control operativo antes del hito.',
   currentWaypoint:
     'Cerrar un frente ejecutable cada vez, con READ ONLY antes de WRITE y sin despliegue si el gate no está explícito.',
+  lastStatus:
+    'Contexto mínimo cargado: hito beta, frente vivo C13, regla READ ONLY → WRITE, no deploy sin gate y no abrir frentes nuevos por ansiedad.',
   method: [
     'READ ONLY diagnostica; WRITE ejecuta solo lo autorizado.',
     'Un relevo no crea decisión canónica por sí solo.',
@@ -91,6 +96,35 @@ No se ha creado rama, commit ni push.
 No se ha modificado ningún archivo.
 Me detengo para no escribir en el sitio incorrecto.`
 
+const sampleContradictionRelay = `ASIENTO REVISOR · READ ONLY · no convierto nada en decisión.
+
+Qué confirma:
+- El gate antes que el arreglo.
+- n ∈ {0,1,2}, con el 0 justificado por producción.
+- Comprometer ≠ publicar.
+- El paso 4 pregunta qué NO cubre el gate y prohíbe arreglarlo.
+
+Qué contradice:
+1 · El paso 2 reimpone una doctrina retirada:
+"Con {n} en la plantilla no queda ninguna."
+Pero C13 rev.4 decía que la doctrina general —el número nunca vive en la plantilla— se cae.
+El gate prueba el FIN, no el MEDIO.
+
+2 · "Reporta y PARA" y "B sin esperarme" son órdenes incompatibles.
+
+3 · La parada B lleva un criterio de aceptación que no está en el brief.
+
+4 · Dos fuentes de verdad para A: el brief titula "son VEINTISÉIS"; la instrucción dice que la lista buena es la que salga del gate.
+
+Bloqueo real:
+- Si el builder ejecuta literalmente el paso 2, reescribe 26+ plantillas.
+- /beta es una superficie nueva y nadie ha dicho que herede garantías.
+
+Qué debería llegar al builder:
+1. El requisito es que el gate pase con 0, 1 y 2. No que no quede ningún {n}.
+2. Elegir entre PARA y seguir con B.
+3. El control extra de B entra por revisión del brief o no entra.`
+
 const emptyResult: WaypointResult = {
   source: 'No detectado',
   front: 'No detectado',
@@ -98,8 +132,10 @@ const emptyResult: WaypointResult = {
   status: 'no-concluyente',
   statusLabel: 'No concluyente',
   waypoint: 'No hay suficiente señal para ubicar el proyecto.',
+  contextHealth: 'Sin mapa operativo cargado no hay criterio suficiente.',
   nextSeat: 'Founder',
   whatChanged: [],
+  contradictions: [],
   confirms: [],
   blocks: [],
   distance: [],
@@ -134,6 +170,29 @@ function unique(items: string[]) {
 }
 
 function buildHandoff(result: Omit<WaypointResult, 'handoff'>, raw: string) {
+  if (result.status === 'stop') {
+    return `PARA PRODUCTO / FOUNDER — CHECKPOINT BREVE
+
+Relé detecta que este relevo NO debe llegar todavía al builder.
+
+No es una decisión nueva.
+No es un bloqueo técnico del builder.
+Es una contradicción de instrucción antes de WRITE.
+
+Contradicciones detectadas:
+${result.contradictions.map((item) => `- ${item}`).join('\n')}
+
+Corrección mínima:
+1. Alinear el requisito con el contrato real: validar la salida/gate, no prescribir el medio interno.
+2. Elegir una sola orden operativa: parar o seguir con la siguiente parada.
+3. Meter cualquier control nuevo por revisión del brief, no como instrucción lateral.
+
+Fuera del builder:
+${result.blocks.map((item) => `- ${item}`).join('\n')}
+
+Cuando estos puntos estén corregidos, el brief puede volver a evaluarse como candidato a WRITE.`
+  }
+
   if (result.status === 'bloqueado') {
     return `PARA CTO / FOUNDER — READ ONLY
 
@@ -224,9 +283,45 @@ Entrega:
 - MODO_DE_FALLO_NO_PREVISTO.`
 }
 
-function analyzeRelay(input: string, selected: Source): WaypointResult {
+function analyzeRelay(input: string, selected: Source, hasProjectContext: boolean): WaypointResult {
   const trimmed = input.trim()
   if (!trimmed) return emptyResult
+
+  if (!hasProjectContext) {
+    const baseResult: Omit<WaypointResult, 'handoff'> = {
+      ...emptyResult,
+      source: sourceLabels[selected],
+      status: 'no-concluyente',
+      statusLabel: 'Sin contexto operativo',
+      contextHealth: 'Falta Project Pack / waypoint / último status. Relé no puede generar criterio fiable solo con el relevo.',
+      waypoint: 'No sincronizable todavía: carga mapa/status del proyecto antes de analizar.',
+      nextSeat: 'Founder',
+      whatChanged: ['Hay input pegado, pero no hay mapa operativo contra el que compararlo.'],
+      contradictions: [],
+      confirms: ['No se debe fingir orientación cuando falta contexto.'],
+      blocks: ['Falta contexto mínimo del proyecto: destino, frente vivo, contratos y STOPs.'],
+      distance: ['Cargar o actualizar el Project Pack antes de decidir si el relevo avanza.'],
+      rabbitHoles: ['Usar un LLM como memoria implícita y volver al mismo problema que Relé intenta resolver.'],
+      memoryCandidates: ['Project Pack mínimo del proyecto.'],
+      notMemory: ['El relevo pegado sin contexto no basta para crear decisión.'],
+    }
+
+    return {
+      ...baseResult,
+      handoff: `PARA FOUNDER — CARGAR CONTEXTO
+
+Relé no puede ubicar este relevo con seguridad.
+
+Falta mapa/status del proyecto:
+- destino;
+- frente vivo;
+- contratos activos;
+- STOPs globales;
+- último waypoint.
+
+No pidas recomendación ni mandes esto al builder hasta cargar ese contexto mínimo.`,
+    }
+  }
 
   const raw = trimmed.toLowerCase()
   const source = inferSource(raw, selected)
@@ -240,11 +335,33 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
   const newFrontRisk = includesAny(raw, ['abrir c14', 'c14', 'otro frente', 'nuevo frente'])
   const corporateRisk = includesAny(raw, ['comité', 'stakeholders', 'roadmap trimestral', 'matriz de riesgos'])
   const deployRisk = includesAny(raw, ['desplegar ahora', 'railway up', 'producción']) && !noDeploy
+  const noNDoctrine =
+    includesAny(raw, ['no queda ninguna', 'no quede ningún {n}', 'no quede ningun {n}', 'ningún {n}', 'ningun {n}']) ||
+    (includesAny(raw, ['{n}']) && includesAny(raw, ['plantilla']) && includesAny(raw, ['no quede', 'no queda']))
+  const gate012 =
+    includesAny(raw, ['0, 1 y 2', '0,1,2', 'n=0', 'n ∈ {0,1,2}', 'n in {0,1,2}']) ||
+    (includesAny(raw, ['0']) && includesAny(raw, ['1']) && includesAny(raw, ['2']) && includesAny(raw, ['gate']))
+  const paraAndContinue =
+    includesAny(raw, ['reporta y para', 'para y reporta', 'para y dilo']) &&
+    includesAny(raw, ['sin esperarme', 'sigue con b', 'seguir con b', 'continúa con b', 'continua con b'])
+  const lateralB = includesAny(raw, [
+    'control que no está en el brief',
+    'criterio de aceptación que no está en el brief',
+    'requisito lateral',
+    'instrucción lateral',
+  ])
+  const twoTruthsForScope =
+    includesAny(raw, ['veintiséis', 'veintiseis', '26']) &&
+    includesAny(raw, ['lista buena', 'salga del gate', 'la que salga'])
+  const betaSurfaceRisk = includesAny(raw, ['/beta', 'landing']) && includesAny(raw, ['superficie nueva', 'garantías', 'garantias'])
+  const instructionContradiction = noNDoctrine || paraAndContinue || lateralB || twoTruthsForScope
   const write = executable || includesAny(raw, ['write', 'ejecuta'])
   const phase = readOnly && !write ? 'READ ONLY' : write ? 'WRITE con gates' : 'SINCRONIZACIÓN'
   const status: WaypointStatus = hardBlock
     ? 'bloqueado'
-    : newFrontRisk || deployRisk || corporateRisk
+    : instructionContradiction
+      ? 'stop'
+      : newFrontRisk || deployRisk || corporateRisk
       ? 'desvio'
       : executable
         ? 'en-ruta'
@@ -254,6 +371,7 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
 
   const statusLabel = {
     'en-ruta': 'En ruta',
+    stop: 'STOP antes de builder',
     bloqueado: 'Bloqueado',
     revision: 'Revisión / no canónico',
     desvio: 'Desvío o madriguera',
@@ -262,6 +380,7 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
 
   const nextSeat = {
     'en-ruta': 'Builder',
+    stop: 'Producto / Founder',
     bloqueado: 'CTO / Founder',
     revision: 'Asiento revisor',
     desvio: 'Founder / Producto',
@@ -271,6 +390,8 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
   const waypoint =
     status === 'en-ruta'
       ? `${front} · ${phase} · ejecutable con límites.`
+      : status === 'stop'
+        ? `${front} · STOP antes de builder. Hay contradicciones en la instrucción.`
       : status === 'bloqueado'
         ? `${front} · bloqueado antes de WRITE. No relanzar hasta resolver causa.`
         : status === 'desvio'
@@ -287,6 +408,17 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
     noDeploy ? 'El despliegue queda bloqueado explícitamente.' : 'No hay bloqueo de despliegue suficientemente explícito.',
   ])
 
+  const contradictions = unique([
+    ...(noNDoctrine && gate012
+      ? ['El relevo exige “que no quede ningún {n}”, pero también dice que el contrato real es pasar el gate con 0, 1 y 2.']
+      : noNDoctrine
+        ? ['El relevo prescribe cómo debe estar escrita la plantilla por dentro, no solo el resultado que debe pasar el gate.']
+        : []),
+    ...(paraAndContinue ? ['Hay dos órdenes incompatibles: “PARA” y continuar con B/sin esperar.'] : []),
+    ...(lateralB ? ['B incorpora un control o criterio de aceptación que no entró por revisión formal del brief.'] : []),
+    ...(twoTruthsForScope ? ['Hay dos fuentes de verdad para el alcance: número fijo de piezas vs lista que salga del gate.'] : []),
+  ])
+
   const confirms = unique([
     ...(executable ? ['Puede avanzar como WRITE con gates si el preflight confirma el contexto.'] : []),
     ...(readOnly ? ['La pieza conserva la separación READ ONLY antes de WRITE.'] : []),
@@ -298,8 +430,10 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
 
   const blocks = unique([
     ...(hardBlock ? ['El builder no pudo confirmar entorno/repo/estado seguro.'] : []),
+    ...(contradictions.length ? ['El brief necesita corrección antes de llegar al builder.'] : []),
     ...(noDeploy ? ['No desplegar hasta verificar árbol limpio y turno/gate de despliegue.'] : []),
     ...(scopeRisk ? ['Si exige tocar captura/admisión/carril externo: STOP y checkpoint.'] : []),
+    ...(betaSurfaceRisk ? ['/beta aparece como superficie nueva sin garantías asignadas; no es tarea implícita del builder.'] : []),
     ...(includesAny(raw, ['para y dilo', 'stop']) ? ['El propio relevo contiene STOP explícito.'] : []),
   ])
 
@@ -315,6 +449,8 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
   const rabbitHoles = unique([
     ...(newFrontRisk ? ['Abrir C14 u otro frente antes de cerrar el frente vivo.'] : []),
     ...(deployRisk ? ['Desplegar por inercia sin gate explícito.'] : []),
+    ...(noNDoctrine ? ['Reescribir internals de plantillas en vez de validar la salida observable del gate.'] : []),
+    ...(lateralB ? ['Colar requisitos nuevos por una instrucción lateral al builder.'] : []),
     ...(scopeRisk ? ['Investigar captura/admisión/carril externo si no bloquea el frente actual.'] : []),
     ...(corporateRisk ? ['Aplicar playbook corporativo pesado en vez de cierre startup.'] : []),
     'Reabrir decisiones antiguas porque no aparecen en el último relevo.',
@@ -324,6 +460,7 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
   const memoryCandidates = unique([
     ...(includesAny(raw, ['un encargo vivo a la vez']) ? ['Un encargo vivo a la vez hasta el hito.'] : []),
     ...(includesAny(raw, ['foco ordena']) ? ['El foco cambia orden, no contenido ni jerarquía.'] : []),
+    ...(noNDoctrine && gate012 ? ['Contrato C13: el gate debe pasar con 0, 1 y 2; no se prescribe el medio interno.'] : []),
     ...(includesAny(raw, ['texto de botón']) ? ['Formulario: usar ubicación/fuente identificadora, no botón de submit.'] : []),
     ...(noDeploy ? ['Antes de desplegar: verificar árbol limpio y gate de despliegue.'] : []),
     ...(scopeRisk ? ['Captura/admisión/carril externo requieren autorización separada.'] : []),
@@ -343,8 +480,10 @@ function analyzeRelay(input: string, selected: Source): WaypointResult {
     status,
     statusLabel,
     waypoint,
+    contextHealth: 'Mapa UXM mínimo cargado. Relé compara el relevo contra destino, waypoint, contratos y STOPs.',
     nextSeat,
     whatChanged,
+    contradictions,
     confirms: confirms.length ? confirms : ['No hay confirmaciones fuertes; tratar como contexto provisional.'],
     blocks: blocks.length ? blocks : ['No se detecta bloqueo explícito, pero revisar gates antes de ejecutar.'],
     distance,
@@ -379,6 +518,7 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
 export function App() {
   const [source, setSource] = useState<Source>('auto')
   const [relay, setRelay] = useState('')
+  const [contextLoaded, setContextLoaded] = useState(true)
   const [result, setResult] = useState<WaypointResult | null>(null)
   const [copied, setCopied] = useState('')
 
@@ -386,7 +526,7 @@ export function App() {
 
   const sync = () => {
     setCopied('')
-    setResult(analyzeRelay(relay, source))
+    setResult(analyzeRelay(relay, source, contextLoaded))
   }
 
   const copyHandoff = async () => {
@@ -403,15 +543,15 @@ export function App() {
     <main className="shell">
       <header className="brand">
         <p className="brand-mark">Relé</p>
-        <p className="brand-note">Maqueta · F0.3 UXM</p>
+        <p className="brand-note">Maqueta · F0.4 UXM</p>
       </header>
 
       <section className="hero" aria-labelledby="hero-title">
-        <p className="eyebrow">Waypoint operativo</p>
-        <h1 id="hero-title">Subirte al AVE en marcha sin perder el mapa.</h1>
+        <p className="eyebrow">Inbox operativo</p>
+        <h1 id="hero-title">Pega lo último. Relé debe avisar antes de que te pierdas.</h1>
         <p className="intro">
-          Pega un brief, revisión o salida del builder. Relé lo compara con el mapa mínimo de UXM y devuelve
-          dónde estás, qué bloquea, qué falta y qué texto pasar al siguiente asiento.
+          Relé solo puede orientar si tiene dos entradas: mapa/status del proyecto y el último relevo pegado.
+          Si falta contexto, no inventa. Si detecta contradicción, grita STOP antes de builder.
         </p>
       </section>
 
@@ -422,6 +562,7 @@ export function App() {
           <p className="map-copy">{uxmPack.destination}</p>
         </div>
         <div className="map-grid">
+          <ListBlock title="Status cargado" items={[uxmPack.lastStatus]} />
           <ListBlock title="Waypoint base" items={[uxmPack.currentWaypoint]} />
           <ListBlock title="Método" items={uxmPack.method} />
           <ListBlock title="Contratos vivos" items={uxmPack.liveContracts} />
@@ -442,7 +583,30 @@ export function App() {
             <button className="text-button" type="button" onClick={() => setRelay(sampleBuilderBlock)}>
               Ejemplo bloqueo builder
             </button>
+            <button className="text-button" type="button" onClick={() => setRelay(sampleContradictionRelay)}>
+              Ejemplo contradicción
+            </button>
           </div>
+        </div>
+
+        <div className="context-toggle" aria-label="Contexto operativo">
+          <span>Contexto operativo:</span>
+          <button
+            aria-pressed={contextLoaded}
+            className={contextLoaded ? 'choice choice-selected' : 'choice'}
+            onClick={() => setContextLoaded(true)}
+            type="button"
+          >
+            Cargado
+          </button>
+          <button
+            aria-pressed={!contextLoaded}
+            className={!contextLoaded ? 'choice choice-selected' : 'choice'}
+            onClick={() => setContextLoaded(false)}
+            type="button"
+          >
+            Sin contexto
+          </button>
         </div>
 
         <div className="source-picker" aria-label="Origen declarado">
@@ -479,6 +643,7 @@ export function App() {
               setResult(null)
               setCopied('')
               setSource('auto')
+              setContextLoaded(true)
             }}
             type="button"
           >
@@ -496,6 +661,7 @@ export function App() {
             </div>
             <div className="pill-row" aria-label="Resumen detectado">
               <Pill>{result.statusLabel}</Pill>
+              <Pill>{result.contextHealth}</Pill>
               <Pill>{result.front}</Pill>
               <Pill>{result.nextSeat}</Pill>
             </div>
@@ -506,6 +672,8 @@ export function App() {
             <p>
               {result.status === 'en-ruta'
                 ? 'Pasar al builder con portada de control. Mantener gates, no abrir frentes y no desplegar sin permiso literal.'
+                : result.status === 'stop'
+                  ? 'No pegar al builder. Devolver al asiento que produjo el brief o llevar a checkpoint mínimo.'
                 : result.status === 'bloqueado'
                   ? 'No relanzar como WRITE. Resolver bloqueo o llevarlo a CTO/Founder como READ ONLY.'
                   : result.status === 'desvio'
@@ -516,6 +684,7 @@ export function App() {
 
           <div className="grid">
             <ListBlock title="Qué cambió con este relevo" items={result.whatChanged} />
+            {result.contradictions.length > 0 && <ListBlock title="Contradicciones detectadas" items={result.contradictions} />}
             <ListBlock title="Qué confirma" items={result.confirms} />
             <ListBlock title="Qué bloquea" items={result.blocks} />
             <ListBlock title="Distancia al destino" items={result.distance} />

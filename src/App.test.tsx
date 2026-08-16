@@ -3,12 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
 
-describe('Relé F0.3 UXM waypoint', () => {
+describe('Relé F0.4 UXM inbox', () => {
   it('sincroniza un brief UXM ejecutable como waypoint y prepara pase al builder', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Subirte al AVE en marcha sin perder el mapa.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Pega lo último. Relé debe avisar antes de que te pierdas.' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Ejemplo brief UXM' }))
     await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
@@ -19,6 +19,20 @@ describe('Relé F0.3 UXM waypoint', () => {
     expect(screen.getByRole('heading', { name: 'Distancia al destino' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Madrigueras detectadas' })).toBeInTheDocument()
     expect(screen.getByText(/PORTADA PARA BUILDER · C13/)).toBeInTheDocument()
+  })
+
+  it('declara que no puede orientar si falta el contexto operativo del proyecto', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Sin contexto' }))
+    await user.click(screen.getByRole('button', { name: 'Ejemplo brief UXM' }))
+    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+
+    expect(screen.getByRole('heading', { name: 'No sincronizable todavía: carga mapa/status del proyecto antes de analizar.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Founder' })).toBeInTheDocument()
+    expect(screen.getByText('Falta contexto mínimo del proyecto: destino, frente vivo, contratos y STOPs.')).toBeInTheDocument()
+    expect(screen.getByText(/PARA FOUNDER — CARGAR CONTEXTO/)).toBeInTheDocument()
   })
 
   it('detecta un bloqueo del builder como waypoint bloqueado, no como WRITE', async () => {
@@ -32,6 +46,21 @@ describe('Relé F0.3 UXM waypoint', () => {
     expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: CTO / Founder' })).toBeInTheDocument()
     expect(screen.getByText('El builder no pudo confirmar entorno/repo/estado seguro.')).toBeInTheDocument()
     expect(screen.getByText(/PARA CTO \/ FOUNDER — READ ONLY/)).toBeInTheDocument()
+  })
+
+  it('emite STOP antes de builder cuando detecta contradicciones internas de instrucción', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Ejemplo contradicción' }))
+    await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
+
+    expect(screen.getByRole('heading', { name: 'C13 · STOP antes de builder. Hay contradicciones en la instrucción.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Producto / Founder' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Contradicciones detectadas' })).toBeInTheDocument()
+    expect(screen.getByText('Hay dos órdenes incompatibles: “PARA” y continuar con B/sin esperar.')).toBeInTheDocument()
+    expect(screen.getByText('Reescribir internals de plantillas en vez de validar la salida observable del gate.')).toBeInTheDocument()
+    expect(screen.getByText(/PARA PRODUCTO \/ FOUNDER — CHECKPOINT BREVE/)).toBeInTheDocument()
   })
 
   it('detecta una madriguera si el relevo intenta abrir otro frente o desplegar', async () => {
