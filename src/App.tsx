@@ -81,10 +81,10 @@ function inferFront(raw: string) {
 
 function inferSource(raw: string, selected: Source) {
   if (selected !== 'auto') return sourceLabels[selected]
-  if (includesAny(raw, ['bloqueo:', 'no se ha modificado', 'working tree', 'tests'])) return 'Builder'
   if (includesAny(raw, ['advisor de producto', 'producto'])) return 'Producto'
   if (includesAny(raw, ['cto', 'arquitectura'])) return 'CTO'
   if (includesAny(raw, ['gtm', 'mercado', 'demo'])) return 'GTM'
+  if (includesAny(raw, ['bloqueo:', 'no se ha modificado', 'working tree', 'tests'])) return 'Builder'
   return 'No detectado'
 }
 

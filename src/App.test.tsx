@@ -14,6 +14,7 @@ describe('Relé F0.2', () => {
     await user.click(screen.getByRole('button', { name: 'Sincronizar' }))
 
     expect(screen.getByRole('heading', { name: 'Ejecutable, con límites' })).toBeInTheDocument()
+    expect(screen.getByText('Origen probable: Producto.')).toBeInTheDocument()
     expect(screen.getByText('Pegar C13 al builder con portada de control. Mantener gates y no desplegar si el brief lo bloquea.')).toBeInTheDocument()
     expect(screen.getByText('No desplegar: falta control de turno/árbol limpio.')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Portada para pegar antes del brief' })).toBeInTheDocument()
