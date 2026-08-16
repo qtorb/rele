@@ -3,16 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { App } from './App'
 
-describe('Relé F0.4 UXM inbox', () => {
+describe('Relé F0.5 UXM alarm', () => {
   it('sincroniza un brief UXM ejecutable como waypoint y prepara pase al builder', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: 'Pega lo último. Relé debe avisar antes de que te pierdas.' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Primero te dice si puedes avanzar. Luego explica por qué.' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Ejemplo brief UXM' }))
+    await user.click(screen.getByRole('button', { name: 'Probar avance' }))
     await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
 
+    expect(screen.getByRole('heading', { name: 'Puede pasar al siguiente asiento.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'C13 · WRITE con gates · ejecutable con límites.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Builder' })).toBeInTheDocument()
     expect(screen.getByText('No desplegar hasta verificar árbol limpio y turno/gate de despliegue.')).toBeInTheDocument()
@@ -26,9 +27,10 @@ describe('Relé F0.4 UXM inbox', () => {
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: 'Sin contexto' }))
-    await user.click(screen.getByRole('button', { name: 'Ejemplo brief UXM' }))
+    await user.click(screen.getByRole('button', { name: 'Probar avance' }))
     await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
 
+    expect(screen.getByRole('heading', { name: 'Relé no tiene criterio suficiente.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'No sincronizable todavía: carga mapa/status del proyecto antes de analizar.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Founder' })).toBeInTheDocument()
     expect(screen.getByText('Falta contexto mínimo del proyecto: destino, frente vivo, contratos y STOPs.')).toBeInTheDocument()
@@ -39,9 +41,10 @@ describe('Relé F0.4 UXM inbox', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: 'Ejemplo bloqueo builder' }))
+    await user.click(screen.getByRole('button', { name: 'Probar bloqueo' }))
     await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
 
+    expect(screen.getByRole('heading', { name: 'No relances el WRITE.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'No detectado · bloqueado antes de WRITE. No relanzar hasta resolver causa.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: CTO / Founder' })).toBeInTheDocument()
     expect(screen.getByText('El builder no pudo confirmar entorno/repo/estado seguro.')).toBeInTheDocument()
@@ -52,9 +55,10 @@ describe('Relé F0.4 UXM inbox', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: 'Ejemplo contradicción' }))
+    await user.click(screen.getByRole('button', { name: 'Probar STOP' }))
     await user.click(screen.getByRole('button', { name: 'Sincronizar waypoint' }))
 
+    expect(screen.getByRole('heading', { name: 'No pegues esto al builder.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'C13 · STOP antes de builder. Hay contradicciones en la instrucción.' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Siguiente pase recomendado: Producto / Founder' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Contradicciones detectadas' })).toBeInTheDocument()

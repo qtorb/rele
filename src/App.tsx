@@ -515,6 +515,57 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
   )
 }
 
+function PrimaryAlert({ result }: { result: WaypointResult }) {
+  const alertCopy: Record<WaypointStatus, { label: string; title: string; body: string; action: string }> = {
+    stop: {
+      label: 'STOP',
+      title: 'No pegues esto al builder.',
+      body: 'Relé detecta contradicción interna de instrucción. Si avanza tal cual, el builder puede ejecutar una madriguera.',
+      action: 'Devuélvelo a Producto/Founder como checkpoint breve.',
+    },
+    bloqueado: {
+      label: 'BLOQUEADO',
+      title: 'No relances el WRITE.',
+      body: 'El builder no pudo confirmar una condición segura de ejecución. Reintentar sin resolverlo solo añade ruido.',
+      action: 'Llévalo a CTO/Founder como READ ONLY.',
+    },
+    desvio: {
+      label: 'MADRIGUERA',
+      title: 'No abras otro frente todavía.',
+      body: 'El relevo intenta cambiar de alcance o acelerar despliegue sin gate claro.',
+      action: 'Haz checkpoint: mantener, aparcar o sustituir el plan.',
+    },
+    'no-concluyente': {
+      label: 'FALTA MAPA',
+      title: 'Relé no tiene criterio suficiente.',
+      body: 'Hay input, pero falta o no alcanza el contexto operativo para decidir si avanza.',
+      action: 'Carga Project Pack/status antes de pedir recomendación.',
+    },
+    revision: {
+      label: 'READ ONLY',
+      title: 'Útil, pero no canónico.',
+      body: 'Es una revisión. Todavía no es decisión ni permiso de ejecución.',
+      action: 'Usa el handoff como revisión acotada.',
+    },
+    'en-ruta': {
+      label: 'EN RUTA',
+      title: 'Puede pasar al siguiente asiento.',
+      body: 'El relevo parece ejecutable con gates. No autoriza despliegue ni cambio de alcance.',
+      action: 'Pásalo al builder con portada de control.',
+    },
+  }
+  const copy = alertCopy[result.status]
+
+  return (
+    <section className={`alert-card alert-${result.status}`} aria-live="polite">
+      <p className="alert-label">{copy.label}</p>
+      <h2>{copy.title}</h2>
+      <p>{copy.body}</p>
+      <strong>{copy.action}</strong>
+    </section>
+  )
+}
+
 export function App() {
   const [source, setSource] = useState<Source>('auto')
   const [relay, setRelay] = useState('')
@@ -543,31 +594,16 @@ export function App() {
     <main className="shell">
       <header className="brand">
         <p className="brand-mark">Relé</p>
-        <p className="brand-note">Maqueta · F0.4 UXM</p>
+        <p className="brand-note">Maqueta · F0.5 UXM</p>
       </header>
 
       <section className="hero" aria-labelledby="hero-title">
-        <p className="eyebrow">Inbox operativo</p>
-        <h1 id="hero-title">Pega lo último. Relé debe avisar antes de que te pierdas.</h1>
+        <p className="eyebrow">Alarma de proyecto</p>
+        <h1 id="hero-title">Primero te dice si puedes avanzar. Luego explica por qué.</h1>
         <p className="intro">
-          Relé solo puede orientar si tiene dos entradas: mapa/status del proyecto y el último relevo pegado.
-          Si falta contexto, no inventa. Si detecta contradicción, grita STOP antes de builder.
+          Pega una salida. Relé responde arriba con una señal clara: avanzar, parar, falta mapa,
+          bloqueo o madriguera. El mapa queda debajo como contexto, no como pantalla principal.
         </p>
-      </section>
-
-      <section className="map-card" aria-labelledby="map-title">
-        <div>
-          <p className="eyebrow">Mapa activo</p>
-          <h2 id="map-title">{uxmPack.project}</h2>
-          <p className="map-copy">{uxmPack.destination}</p>
-        </div>
-        <div className="map-grid">
-          <ListBlock title="Status cargado" items={[uxmPack.lastStatus]} />
-          <ListBlock title="Waypoint base" items={[uxmPack.currentWaypoint]} />
-          <ListBlock title="Método" items={uxmPack.method} />
-          <ListBlock title="Contratos vivos" items={uxmPack.liveContracts} />
-          <ListBlock title="STOPs globales" items={uxmPack.globalStops} />
-        </div>
       </section>
 
       <section className="input-card" aria-labelledby="input-title">
@@ -577,14 +613,14 @@ export function App() {
             <h2 id="input-title">Pega lo último que tienes</h2>
           </div>
           <div className="sample-actions">
-            <button className="text-button" type="button" onClick={() => setRelay(sampleRelay)}>
-              Ejemplo brief UXM
+            <button className="text-button" type="button" onClick={() => setRelay(sampleContradictionRelay)}>
+              Probar STOP
             </button>
             <button className="text-button" type="button" onClick={() => setRelay(sampleBuilderBlock)}>
-              Ejemplo bloqueo builder
+              Probar bloqueo
             </button>
-            <button className="text-button" type="button" onClick={() => setRelay(sampleContradictionRelay)}>
-              Ejemplo contradicción
+            <button className="text-button" type="button" onClick={() => setRelay(sampleRelay)}>
+              Probar avance
             </button>
           </div>
         </div>
@@ -652,8 +688,25 @@ export function App() {
         </div>
       </section>
 
+      <section className="map-card" aria-labelledby="map-title">
+        <div>
+          <p className="eyebrow">Contexto usado por Relé</p>
+          <h2 id="map-title">{uxmPack.project}</h2>
+          <p className="map-copy">{uxmPack.destination}</p>
+        </div>
+        <div className="map-grid">
+          <ListBlock title="Status cargado" items={[uxmPack.lastStatus]} />
+          <ListBlock title="Waypoint base" items={[uxmPack.currentWaypoint]} />
+          <ListBlock title="Método" items={uxmPack.method} />
+          <ListBlock title="Contratos vivos" items={uxmPack.liveContracts} />
+          <ListBlock title="STOPs globales" items={uxmPack.globalStops} />
+        </div>
+      </section>
+
       {result && (
         <section className="result" aria-labelledby="waypoint-title">
+          <PrimaryAlert result={result} />
+
           <div className="result-header">
             <div>
               <p className="eyebrow">Waypoint UXM</p>

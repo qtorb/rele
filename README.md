@@ -1,13 +1,13 @@
-# Relé · F0.4 UXM
+# Relé · F0.5 UXM
 
 Relé es un **plugin de proyecto con memoria operativa versionable**. Esta fase
 usa UXM como primer proyecto real de validación: no intenta gestionar todo el
 proyecto, sino ayudarte a recuperar el mapa cuando cambias de sesión, rol,
 modelo o brief.
 
-F0.4 valida el gesto central corregido:
+F0.5 valida el gesto central corregido:
 
-> Pegar la última salida y recibir una alerta útil antes de perder el control.
+> Pegar la última salida y recibir una señal visible antes de leer el detalle.
 
 La maqueta usa un mapa UXM mínimo y casos sintéticos. No lee repositorios, no
 guarda datos, no integra modelos y no publica briefs reales completos. Si falta
@@ -19,9 +19,11 @@ una capa de evidencia puntual —rama, PR, archivos tocados, tests, commits—, 
 la fuente principal de orientación. El sentido operativo vive en el Project
 Pack, el waypoint y los relevos pegados.
 
-## Qué valida F0.4
+## Qué valida F0.5
 
-- Que Relé arranque como inbox operativo, no como dashboard.
+- Que Relé arranque como alarma de proyecto, no como dashboard.
+- Que la primera salida sea una señal visible: `STOP`, `BLOQUEADO`,
+  `MADRIGUERA`, `FALTA MAPA`, `READ ONLY` o `EN RUTA`.
 - Que use dos entradas explícitas: mapa/status del proyecto + último relevo.
 - Que compare un relevo contra un mapa mínimo del proyecto.
 - Que distinga avance, `STOP` antes de builder, bloqueo, revisión no canónica y
@@ -63,7 +65,7 @@ npm run test
 npm run build
 ```
 
-F0.4 termina después de validar la maqueta. Persistencia `.rele/`, Git real,
+F0.5 termina después de validar la maqueta. Persistencia `.rele/`, Git real,
 Electron, IA o integración con LLMs requieren un brief posterior.
 
 ## Previsualización F0
