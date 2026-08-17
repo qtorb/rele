@@ -135,3 +135,21 @@ tests corren con un doble y sin tocar disco.
 ```bash
 npm test
 ```
+
+## Criterio de cierre permanente
+
+**Todo WRITE que toque el plugin sube la versión en `.claude-plugin/plugin.json`
+y verifica la caché tras reinstalar.**
+
+La ruta de caché de instalación lleva la versión dentro. Si no se sube, una
+reinstalación puede no reemplazar nada y dejar corriendo un build viejo mientras
+el repo ya tiene otro. Ningún test lo detecta: los tests corren sobre el repo,
+no sobre lo instalado. Un build instalado que diverge del repo es invisible
+hasta que alguien se pregunta por qué una corrección no surte efecto.
+
+Después de `claude plugin install`, comprobar cuatro cosas en la caché:
+
+1. La ruta contiene la versión nueva.
+2. Los ficheros nuevos del WRITE están ahí.
+3. `SKILL.md` de la caché tiene los cambios de este WRITE, no los del anterior.
+4. Una corrida real hace lo que el WRITE dice que hace.
