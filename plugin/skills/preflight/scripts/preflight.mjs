@@ -17,7 +17,7 @@ import { nodeRunner, verifyClaims } from './lib/verify.mjs'
 import { PARA, formatReport, globalSignal } from './lib/report.mjs'
 import { appendRun, buildEntry, countLine, defaultLogPath, readStats } from './lib/log.mjs'
 
-const PLUGIN_VERSION = '0.2.0'
+const PLUGIN_VERSION = '0.3.0'
 
 function parseArgs(argv) {
   const args = { file: null, base: 'HEAD', repo: process.cwd() }
@@ -68,6 +68,7 @@ appendRun(
     text,
     verdicts,
     version: PLUGIN_VERSION,
+    origin: 'cli',
   }),
   { path: logPath },
 )

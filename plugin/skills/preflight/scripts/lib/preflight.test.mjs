@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { extractClaims } from './claims.mjs'
 import { CONTRADICHA, NO_COMPROBABLE, SOSTENIDA, verifyClaims } from './verify.mjs'
-import { PARA, PUEDE_IR, SIN_AFIRMACIONES, formatReport, globalSignal } from './report.mjs'
+import { PARA, PUEDE_IR, SIN_AFIRMACIONES, formatReport, globalSignal, plural } from './report.mjs'
 
 const FIXTURE_001 = readFileSync(resolve(process.cwd(), 'plugin/fixtures/001-brief-f1-w1.md'), 'utf8')
 const FIXTURE_002 = readFileSync(
@@ -33,6 +33,12 @@ function fakeRepo({ branches = [], paths = [], commits = [], prs = {}, gh = true
       }
       if (args[0] === 'ls-remote') {
         return { ok: true, stdout: branches.includes(name) ? `aaaaaaa\trefs/heads/${name}\n` : '', code: 0 }
+      }
+      // Búsqueda por nombre suelto en todo el árbol.
+      if (args[0] === 'ls-files') {
+        const bareName = args[args.length - 1]
+        const hits = paths.filter((path) => path === bareName || path.endsWith(`/${bareName}`))
+        return { ok: true, stdout: hits.join('\n'), code: 0 }
       }
       if (args[0] === 'cat-file') {
         const spec = args[2]
@@ -318,6 +324,68 @@ describe('F2-W2 · intención en rutas', () => {
   })
 })
 
+describe('F3-W1 · un nombre de fichero suelto se busca en todo el árbol', () => {
+  it('1 · un nombre suelto que existe en un subdirectorio es SOSTENIDA', () => {
+    const text = 'El detector ya está en `capture.mjs` y los tests pasan.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].claim.type).toBe('path')
+    expect(verdicts[0].bucket).toBe(SOSTENIDA)
+    expect(verdicts[0].repoSays).toContain('src/capture/capture.mjs')
+    // El comando del reporte es el de la búsqueda, no el de la raíz.
+    expect(verdicts[0].command).toContain('ls-files')
+    expect(verdicts[0].command).not.toContain('cat-file')
+  })
+
+  it('2 · un nombre suelto que no existe en ninguna parte es CONTRADICHA', () => {
+    const text = 'El detector ya está en `inventado.mjs` y los tests pasan.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].bucket).toBe(CONTRADICHA)
+    expect(verdicts[0].repoSays).toContain('no aparece en ninguna parte')
+    expect(globalSignal(verdicts)).toBe(PARA)
+  })
+
+  it('3 · una ruta con directorios que existe sigue siendo SOSTENIDA', () => {
+    const text = 'El detector ya está en `src/capture/capture.mjs`.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].bucket).toBe(SOSTENIDA)
+    // Con directorios la ruta sí es la afirmación: se comprueba exacta.
+    expect(verdicts[0].command).toContain('cat-file')
+  })
+
+  it('4 · una ruta con directorios que no existe sigue siendo CONTRADICHA', () => {
+    const text = 'El detector ya está en `src/otro/capture.mjs`.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].bucket).toBe(CONTRADICHA)
+    expect(verdicts[0].command).toContain('cat-file')
+  })
+
+  it('5 · un nombre suelto en varios sitios es SOSTENIDA y el reporte dice cuántos, sin elegir', () => {
+    const text = 'El detector ya está en `tipos.mjs`.'
+    const verdicts = analyze(text, {
+      paths: ['src/capture/tipos.mjs', 'src/informe/tipos.mjs', 'src/gate/tipos.mjs'],
+    })
+
+    expect(verdicts[0].bucket).toBe(SOSTENIDA)
+    expect(verdicts[0].repoSays).toContain('3 sitios')
+
+    const report = formatReport(verdicts)
+    expect(report).toContain('aparece en 3 sitios')
+    // No elige ninguno de los tres.
+    expect(report).not.toContain('src/capture/tipos.mjs')
+    expect(report).not.toContain('src/informe/tipos.mjs')
+  })
+
+  it('un nombre suelto que el texto pide crear sigue siendo no comprobable', () => {
+    const verdicts = analyze('Crea `nuevo.mjs` con el detector.', { paths: [] })
+
+    expect(verdicts[0].bucket).toBe(NO_COMPROBABLE)
+  })
+})
+
 describe('F2-W3 · recibo de comprobación', () => {
   // Frases que afirman ausencia. Ninguna puede aparecer sin su denominador.
   const ABSENCE_PATTERNS = [
@@ -420,6 +488,24 @@ describe('F2-W3 · recibo de comprobación', () => {
     for (const report of reports) {
       for (const pattern of WHOLE_TEXT_PATTERNS) expect(report).not.toMatch(pattern)
     }
+  })
+
+  it('la línea de señal concuerda el número con el sustantivo en 0, 1 y 2', () => {
+    const frase = (n) => plural(n, 'afirmación comprobada', 'afirmaciones comprobadas')
+
+    expect(frase(0)).toBe('0 afirmaciones comprobadas')
+    expect(frase(1)).toBe('1 afirmación comprobada')
+    expect(frase(2)).toBe('2 afirmaciones comprobadas')
+
+    // Y en el reporte, con el artículo concordado también.
+    const una = analyze('El fichero `src/App.tsx` ya existe.', { paths: ['src/App.tsx'] })
+    expect(formatReport(una)).toContain('sin contradicciones en la 1 afirmación comprobada')
+
+    const dos = analyze(
+      ['El fichero `src/App.tsx` ya existe.', 'Seguimos en la rama `feat/dos-cosas`.'].join('\n'),
+      { paths: ['src/App.tsx'], branches: ['feat/dos-cosas'] },
+    )
+    expect(formatReport(dos)).toContain('sin contradicciones en las 2 afirmaciones comprobadas')
   })
 
   it('la línea de cuenta va al final, y sin ella el reporte sigue siendo válido', () => {

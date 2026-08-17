@@ -17,6 +17,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
+import { plural } from './report.mjs'
 
 export const DISABLE_ENV = 'RELE_NO_LOG'
 export const PATH_ENV = 'RELE_LOG_PATH'
@@ -40,12 +41,14 @@ export function loggingDisabled(env = process.env) {
   return normalized !== '' && normalized !== '0' && normalized !== 'false'
 }
 
-export function buildEntry({ date, repo, branch, signal, text, verdicts, version }) {
+export function buildEntry({ date, repo, branch, signal, text, verdicts, version, origin = 'cli' }) {
   return {
     fecha: date,
     repo,
     rama: branch,
     senal: signal,
+    // De dónde vino la corrida: la línea de comandos del plugin o la caja de la app.
+    origen: origin,
     version_plugin: version,
     texto: text,
     afirmaciones: (verdicts ?? []).map((item) => ({
@@ -122,8 +125,7 @@ function lastContradictionText({ total, lastContradiction }) {
 
   const distance = total - lastContradiction
   if (distance === 0) return 'en la corrida anterior'
-  if (distance === 1) return 'hace 1 corrida'
-  return `hace ${distance} corridas`
+  return `hace ${plural(distance, 'corrida', 'corridas')}`
 }
 
 /**

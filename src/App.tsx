@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { InboxPanel } from './components/InboxPanel'
 import { MemoryPanel } from './components/MemoryPanel'
+import { PreflightPanel } from './components/PreflightPanel'
 import { ProjectPackPanel } from './components/ProjectPackPanel'
 import { ResultPanel } from './components/ResultPanel'
 import { applyMemoryUpdate } from './lib/applyUpdate'
@@ -161,6 +162,8 @@ export function App() {
 
       <div className="layout">
         <div className="column column-left">
+          <PreflightPanel />
+
           <InboxPanel
             analyzing={analyzing}
             mode={mode}
