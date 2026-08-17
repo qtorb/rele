@@ -1,11 +1,46 @@
-# Relé · F1 UXM
+# Relé
 
-Relé es un **plugin de proyecto con memoria operativa activa y versionable**. F1 lo
-convierte de maqueta en app local útil: una sola pantalla que guarda un Project
-Pack, recibe la última salida del proyecto, la analiza y devuelve una señal
-visible más un handoff copiable.
+Relé es **memoria operativa para trabajo AI-first**. El repo contiene dos cosas:
+
+| | Qué es | Estado |
+|---|---|---|
+| [`plugin/`](plugin/) | **F2 · plugin de Claude Code.** Comprobación previa: verifica contra el repo lo que un texto afirma sobre el repo. Sin configuración. | En desarrollo |
+| `src/`, `server/` | **F1 app · congelada, referencia.** App local de una pantalla con Project Pack, señales y handoff. | Congelada |
+
+Decisión del founder, 2026-08-17: Relé es un plugin sin onboarding, y el pack
+vivirá en el repo del proyecto. **La app de F1 queda congelada como referencia:**
+no se borra y sigue funcionando, pero no se invierte más ahí. Lo que aprendió
+—puerta de evidencia, asimetría, silencio ante lo desconocido— se lleva al
+plugin.
+
+---
+
+# F2 · plugin de comprobación previa
+
+Un texto llega afirmando cosas sobre el repo: que hay que crear tal rama, que
+tal PR está cerrado, que tal fichero existe. Algunas son falsas, y descubrirlo a
+mitad de la ejecución sale caro. El plugin las comprueba antes.
+
+Instrucciones completas en [`plugin/README.md`](plugin/README.md).
+
+```bash
+claude plugin marketplace add ./
+```
+
+```bash
+claude plugin install rele-preflight@rele
+```
+
+No hay ningún campo que rellenar. De cero a primera señal útil: 3,0 s medidos.
+
+---
+
+# F1 app · congelada, referencia
 
 > F1 no coordina todo el sistema. F1 evita que pierdas el siguiente paso.
+
+Una sola pantalla que guarda un Project Pack, recibe la última salida del
+proyecto, la analiza y devuelve una señal visible más un handoff copiable.
 
 ## La pantalla
 
