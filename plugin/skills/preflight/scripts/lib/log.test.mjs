@@ -120,6 +120,40 @@ describe('línea de cuenta', () => {
     const log = memoryLog(seed([false, false, false]))
 
     expect(countLine(readStats('/x.jsonl', log.io))).toBe('corridas: 3 · última contradicción: ninguna')
+
+    // Una sola corrida limpia: el caso que el fixture de tres no distinguía.
+    const una = memoryLog(seed([false]))
+    expect(countLine(readStats('/x.jsonl', una.io))).toBe('corridas: 1 · última contradicción: ninguna')
+
+    // Y para cualquier N, nunca "hace 0".
+    for (const n of [2, 5, 12]) {
+      const varias = memoryLog(seed(Array.from({ length: n }, () => false)))
+      const line = countLine(readStats('/x.jsonl', varias.io))
+      expect(line).toBe(`corridas: ${n} · última contradicción: ninguna`)
+      expect(line).not.toContain('hace')
+    }
+  })
+
+  it('un registro recién creado no imprime línea, así que nunca dice "hace 0"', () => {
+    const vacio = memoryLog('')
+
+    expect(readStats('/x.jsonl', vacio.io)).toBeNull()
+    expect(countLine(readStats('/x.jsonl', vacio.io))).toBeNull()
+  })
+
+  it('la distancia se redacta sin "hace 0" y con singular cuando toca', () => {
+    // Contradicción en la corrida más reciente del registro: distancia cero.
+    const anterior = memoryLog(seed([false, false, true]))
+    expect(countLine(readStats('/x.jsonl', anterior.io))).toBe(
+      'corridas: 3 · última contradicción: en la corrida anterior',
+    )
+
+    const unaAntes = memoryLog(seed([false, true, false]))
+    expect(countLine(readStats('/x.jsonl', unaAntes.io))).toBe('corridas: 3 · última contradicción: hace 1 corrida')
+
+    for (const log of [anterior, unaAntes]) {
+      expect(countLine(readStats('/x.jsonl', log.io))).not.toContain('hace 0')
+    }
   })
 
   it('9 · registro ausente o corrupto omite la línea entera', () => {

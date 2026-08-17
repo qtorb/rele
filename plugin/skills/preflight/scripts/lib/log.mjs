@@ -111,14 +111,26 @@ export function readStats(path, io = nodeIo) {
 }
 
 /**
+ * Redacta la distancia a la última contradicción.
+ *
+ * "hace 0 corridas" se lee como "ninguna" y significa justo lo contrario, así
+ * que la distancia cero se dice con palabras. El singular también, porque
+ * "hace 1 corridas" delata que el número lo escribió una máquina.
+ */
+function lastContradictionText({ total, lastContradiction }) {
+  if (lastContradiction === null) return 'ninguna'
+
+  const distance = total - lastContradiction
+  if (distance === 0) return 'en la corrida anterior'
+  if (distance === 1) return 'hace 1 corrida'
+  return `hace ${distance} corridas`
+}
+
+/**
  * Un dato, no una alarma: sin umbral, sin color, sin recomendación. Si N
  * corridas sin contradicción es mucho o poco lo juzga la persona.
  */
 export function countLine(stats) {
   if (!stats) return null
-  const distance =
-    stats.lastContradiction === null
-      ? 'ninguna'
-      : `hace ${stats.total - stats.lastContradiction} corridas`
-  return `corridas: ${stats.total} · última contradicción: ${distance}`
+  return `corridas: ${stats.total} · última contradicción: ${lastContradictionText(stats)}`
 }
