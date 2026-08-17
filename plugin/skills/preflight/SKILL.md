@@ -71,6 +71,10 @@ Ante la duda, no comprobable. Nunca contradicción.
 
 Cada corrida se anexa a `~/.rele/preflight-log.jsonl`, fuera del repo analizado. Para desactivarlo, `RELE_NO_LOG=1`; para cambiar la ruta, `RELE_LOG_PATH`.
 
+## Comprobación automática
+
+Un enganche `UserPromptSubmit` comprueba cada mensaje enviado y solo habla si hay algo que decir; para apagarlo entero, `RELE_NO_HOOK=1`.
+
 ## Límites
 
 - Solo comprueba ramas, pull requests, rutas de fichero y commits.
