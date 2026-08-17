@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "rele",
+  "description": "Relé · memoria operativa para trabajo AI-first",
+  "owner": {
+    "name": "qtorb",
+    "email": "albert@qtorb.com"
+  },
+  "plugins": [
+    {
+      "name": "rele-preflight",
+      "description": "Comprueba contra el repo lo que un texto afirma sobre el repo: ramas, pull requests, rutas de fichero y commits. Sin configuración.",
+      "category": "workflow",
+      "source": "./plugin"
+    }
+  ]
+}
