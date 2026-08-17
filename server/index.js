@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import express from 'express'
 import dotenv from 'dotenv'
 import { MODEL, extract, hasApiKey } from './extractor.js'
+import { normalizeProjectPath } from './paths.js'
 
 // Una sola fuente: la app importa exactamente los módulos que ejecuta el
 // plugin. No hay copia de la lógica de comprobación; si el plugin cambia, la
@@ -78,18 +79,20 @@ app.post('/api/preflight', (req, res) => {
     res.status(400).json({ ok: false, error: 'No hay texto que comprobar.' })
     return
   }
-  if (typeof projectPath !== 'string' || !projectPath.trim()) {
+  // Se normaliza una sola vez, antes de tocar el disco: lo que llega de la caja
+  // puede venir entrecomillado por "Copiar como ruta".
+  const repo = normalizeProjectPath(projectPath)
+  if (!repo) {
     res.status(400).json({ ok: false, error: 'Falta la carpeta del proyecto contra el que comprobar.' })
     return
   }
 
-  const problem = checkProject(projectPath.trim())
+  const problem = checkProject(repo)
   if (problem) {
     res.status(400).json({ ok: false, error: problem })
     return
   }
 
-  const repo = projectPath.trim()
   const run = nodeRunner(repo)
 
   try {
