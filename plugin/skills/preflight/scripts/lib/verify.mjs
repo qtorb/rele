@@ -118,7 +118,14 @@ function verifyPr(claim, { run, ghAvailable }) {
  * trabajo por hacer, y una mención suelta no afirma nada.
  */
 function verifyPath(claim, { run, baseRef }) {
-  const args = ['cat-file', '-e', `${baseRef}:${claim.value}`]
+  // Un nombre suelto no afirma dónde está el fichero, solo que existe. Buscarlo
+  // únicamente en la raíz marcaba como inexistente lo que vivía en un
+  // subdirectorio. Con directorios, en cambio, la ruta sí es la afirmación y se
+  // comprueba tal cual.
+  const bare = !claim.value.includes('/')
+  const args = bare
+    ? ['ls-files', '--', `*/${claim.value}`, claim.value]
+    : ['cat-file', '-e', `${baseRef}:${claim.value}`]
   const command = display('git', args)
 
   if (claim.pathIntent === 'create') {
@@ -136,10 +143,34 @@ function verifyPath(claim, { run, baseRef }) {
     return verdict(claim, NO_COMPROBABLE, `${claim.value} se menciona sin afirmar que exista.`, command)
   }
 
-  const exists = run('git', args).ok
-  return exists
-    ? verdict(claim, SOSTENIDA, `${claim.value} existe en ${baseRef}.`, command, `existe en ${baseRef}`)
-    : verdict(claim, CONTRADICHA, `${claim.value} no existe en ${baseRef}.`, command)
+  if (!bare) {
+    return run('git', args).ok
+      ? verdict(claim, SOSTENIDA, `${claim.value} existe en ${baseRef}.`, command, `existe en ${baseRef}`)
+      : verdict(claim, CONTRADICHA, `${claim.value} no existe en ${baseRef}.`, command)
+  }
+
+  const result = run('git', args)
+  const matches = result.ok
+    ? result.stdout.split('\n').map((line) => line.trim()).filter(Boolean)
+    : []
+
+  if (!matches.length) {
+    return verdict(claim, CONTRADICHA, `${claim.value} no aparece en ninguna parte del árbol.`, command)
+  }
+
+  // Con varias coincidencias no elegimos una: decir cuántas hay es el dato
+  // honesto, y elegir sería inventar cuál quiso decir el texto.
+  if (matches.length > 1) {
+    return verdict(
+      claim,
+      SOSTENIDA,
+      `${claim.value} aparece en ${matches.length} sitios del árbol.`,
+      command,
+      `aparece en ${matches.length} sitios`,
+    )
+  }
+
+  return verdict(claim, SOSTENIDA, `${claim.value} existe en ${matches[0]}.`, command, `existe en ${matches[0]}`)
 }
 
 function verifyCommit(claim, { run }) {

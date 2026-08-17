@@ -50,7 +50,7 @@ Cuatro tipos de afirmación, y solo cuatro:
 |---|---|---|
 | Rama | `feat/...`, `fix/...` y similares, o cualquier token entrecomillado con forma de rama | `git branch -a`, `git ls-remote` |
 | Pull request | `#N` o una URL de PR | `gh pr view N --json state,headRefName,baseRefName` |
-| Ruta de fichero | token con forma de ruta y extensión conocida | `git cat-file -e <base>:<ruta>` |
+| Ruta de fichero | token con forma de ruta y extensión conocida | `git cat-file -e <base>:<ruta>`, o `git ls-files` si es un nombre suelto |
 | Commit | SHA de 7 o más caracteres hexadecimales | `git cat-file -e <sha>^{commit}` |
 
 ## Los tres cubos
@@ -102,6 +102,24 @@ demasiado frecuente para alarmar. Queda aparcado y escrito.
 
 Verbos como "vive en" no deciden nada por sí solos: describen igual de bien el
 repo de hoy que dónde irá el código mañana. Sin más señal caen en la regla 3.
+
+### Nombre suelto contra ruta con directorios
+
+Citar `capture.mjs` afirma que el fichero existe, no que esté en la raíz. Así que
+un nombre sin directorios se busca **en todo el árbol**:
+
+- Aparece en algún sitio → sostenida, y el comando del reporte es el de la
+  búsqueda.
+- No aparece en ninguna parte → contradicha.
+- Aparece en varios sitios → sostenida, y el reporte dice cuántos sin elegir
+  ninguno. Elegir sería inventar cuál quiso decir el texto.
+
+Si el texto da una ruta con directorios, esa ruta es la afirmación y se
+comprueba exacta.
+
+Un matiz declarado: la búsqueda por nombre suelto usa `git ls-files`, que mira
+los ficheros seguidos del árbol de trabajo, no una referencia concreta. Las
+rutas con directorios sí respetan `--base`.
 
 ## Límites de v1
 

@@ -34,6 +34,12 @@ function fakeRepo({ branches = [], paths = [], commits = [], prs = {}, gh = true
       if (args[0] === 'ls-remote') {
         return { ok: true, stdout: branches.includes(name) ? `aaaaaaa\trefs/heads/${name}\n` : '', code: 0 }
       }
+      // Búsqueda por nombre suelto en todo el árbol.
+      if (args[0] === 'ls-files') {
+        const bareName = args[args.length - 1]
+        const hits = paths.filter((path) => path === bareName || path.endsWith(`/${bareName}`))
+        return { ok: true, stdout: hits.join('\n'), code: 0 }
+      }
       if (args[0] === 'cat-file') {
         const spec = args[2]
         if (spec.endsWith('^{commit}')) {
@@ -315,6 +321,68 @@ describe('F2-W2 · intención en rutas', () => {
     // Dentro de una sección de alcance, pero afirmando estado: es verificable.
     expect(analyze(text, { paths: [] })[0].bucket).toBe(CONTRADICHA)
     expect(analyze(text, { paths: ['src/rules/validate.ts'] })[0].bucket).toBe(SOSTENIDA)
+  })
+})
+
+describe('F3-W1 · un nombre de fichero suelto se busca en todo el árbol', () => {
+  it('1 · un nombre suelto que existe en un subdirectorio es SOSTENIDA', () => {
+    const text = 'El detector ya está en `capture.mjs` y los tests pasan.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].claim.type).toBe('path')
+    expect(verdicts[0].bucket).toBe(SOSTENIDA)
+    expect(verdicts[0].repoSays).toContain('src/capture/capture.mjs')
+    // El comando del reporte es el de la búsqueda, no el de la raíz.
+    expect(verdicts[0].command).toContain('ls-files')
+    expect(verdicts[0].command).not.toContain('cat-file')
+  })
+
+  it('2 · un nombre suelto que no existe en ninguna parte es CONTRADICHA', () => {
+    const text = 'El detector ya está en `inventado.mjs` y los tests pasan.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].bucket).toBe(CONTRADICHA)
+    expect(verdicts[0].repoSays).toContain('no aparece en ninguna parte')
+    expect(globalSignal(verdicts)).toBe(PARA)
+  })
+
+  it('3 · una ruta con directorios que existe sigue siendo SOSTENIDA', () => {
+    const text = 'El detector ya está en `src/capture/capture.mjs`.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].bucket).toBe(SOSTENIDA)
+    // Con directorios la ruta sí es la afirmación: se comprueba exacta.
+    expect(verdicts[0].command).toContain('cat-file')
+  })
+
+  it('4 · una ruta con directorios que no existe sigue siendo CONTRADICHA', () => {
+    const text = 'El detector ya está en `src/otro/capture.mjs`.'
+    const verdicts = analyze(text, { paths: ['src/capture/capture.mjs'] })
+
+    expect(verdicts[0].bucket).toBe(CONTRADICHA)
+    expect(verdicts[0].command).toContain('cat-file')
+  })
+
+  it('5 · un nombre suelto en varios sitios es SOSTENIDA y el reporte dice cuántos, sin elegir', () => {
+    const text = 'El detector ya está en `tipos.mjs`.'
+    const verdicts = analyze(text, {
+      paths: ['src/capture/tipos.mjs', 'src/informe/tipos.mjs', 'src/gate/tipos.mjs'],
+    })
+
+    expect(verdicts[0].bucket).toBe(SOSTENIDA)
+    expect(verdicts[0].repoSays).toContain('3 sitios')
+
+    const report = formatReport(verdicts)
+    expect(report).toContain('aparece en 3 sitios')
+    // No elige ninguno de los tres.
+    expect(report).not.toContain('src/capture/tipos.mjs')
+    expect(report).not.toContain('src/informe/tipos.mjs')
+  })
+
+  it('un nombre suelto que el texto pide crear sigue siendo no comprobable', () => {
+    const verdicts = analyze('Crea `nuevo.mjs` con el detector.', { paths: [] })
+
+    expect(verdicts[0].bucket).toBe(NO_COMPROBABLE)
   })
 })
 

@@ -4,14 +4,17 @@ Relé es **memoria operativa para trabajo AI-first**. El repo contiene dos cosas
 
 | | Qué es | Estado |
 |---|---|---|
-| [`plugin/`](plugin/) | **F2 · plugin de Claude Code.** Comprobación previa: verifica contra el repo lo que un texto afirma sobre el repo. Sin configuración. | En desarrollo |
-| `src/`, `server/` | **F1 app · congelada, referencia.** App local de una pantalla con Project Pack, señales y handoff. | Congelada |
+| [`plugin/`](plugin/) | **F2 · plugin de Claude Code.** Comprobación previa desde la línea de comandos. Sin configuración. | En desarrollo |
+| `src/`, `server/` | **F3 · la app, con una caja donde pegar.** La misma comprobación, con una carpeta y un botón. Más el Project Pack de F1. | En desarrollo |
 
-Decisión del founder, 2026-08-17: Relé es un plugin sin onboarding, y el pack
-vivirá en el repo del proyecto. **La app de F1 queda congelada como referencia:**
-no se borra y sigue funcionando, pero no se invierte más ahí. Lo que aprendió
-—puerta de evidencia, asimetría, silencio ante lo desconocido— se lleva al
-plugin.
+Decisión del founder, 2026-08-17 13:32: la línea de comandos no es una puerta de
+entrada usable. **La app se descongela** y recibe dentro el mismo código de
+comprobación que usa el plugin. El plugin sigue existiendo y funcionando igual.
+
+**Una sola fuente:** la app importa los módulos del plugin (`claims`, `verify`,
+`report`, `log`) directamente desde `plugin/skills/preflight/scripts/lib/`. No
+hay copia de la lógica de comprobación. Si las dos vías dieran señales
+distintas, sería un fallo, no una diferencia de configuración.
 
 ---
 
@@ -35,12 +38,37 @@ No hay ningún campo que rellenar. De cero a primera señal útil: 3,0 s medidos
 
 ---
 
-# F1 app · congelada, referencia
+# F3 · la caja donde pegar
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Frontend en `http://localhost:5173`, backend local en `:8787`. **No hace falta
+ninguna clave para arrancar** — la clave solo entra en juego para el extractor
+LLM del Project Pack, que es opcional.
+
+Arriba del todo hay una caja: la carpeta del proyecto —se recuerda entre
+visitas— y un área donde pegar el brief. El botón `Comprobar` devuelve los
+mismos cuatro bloques que el plugin. Si la carpeta no existe, no es un
+repositorio git o falta `gh`, lo dice en una frase, no con una traza.
+
+El endpoint es `POST /api/preflight` con `text` y `projectPath`. Escribe en el
+mismo registro que el plugin, marcando la corrida con `origen: "app"`.
+
+---
+
+# F1 · Project Pack, señales y handoff
 
 > F1 no coordina todo el sistema. F1 evita que pierdas el siguiente paso.
 
-Una sola pantalla que guarda un Project Pack, recibe la última salida del
-proyecto, la analiza y devuelve una señal visible más un handoff copiable.
+Debajo de la caja sigue intacta la pantalla de F1: guarda un Project Pack,
+recibe la última salida del proyecto, la analiza y devuelve una señal visible
+más un handoff copiable.
 
 ## La pantalla
 

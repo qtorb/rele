@@ -40,12 +40,14 @@ export function loggingDisabled(env = process.env) {
   return normalized !== '' && normalized !== '0' && normalized !== 'false'
 }
 
-export function buildEntry({ date, repo, branch, signal, text, verdicts, version }) {
+export function buildEntry({ date, repo, branch, signal, text, verdicts, version, origin = 'cli' }) {
   return {
     fecha: date,
     repo,
     rama: branch,
     senal: signal,
+    // De dónde vino la corrida: la línea de comandos del plugin o la caja de la app.
+    origen: origin,
     version_plugin: version,
     texto: text,
     afirmaciones: (verdicts ?? []).map((item) => ({

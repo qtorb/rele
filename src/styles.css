@@ -548,6 +548,78 @@ textarea {
   font-size: 0.93rem;
 }
 
+/* --- Comprobación previa ------------------------------------------------ */
+
+.preflight-panel .field + .field {
+  margin-top: 16px;
+}
+
+.preflight-error,
+.preflight-notice {
+  margin: 16px 0 0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.preflight-error {
+  border: 1px solid #b42318;
+  background: #fff4f2;
+  color: #8a2018;
+}
+
+.preflight-notice {
+  border: 1px solid #b54708;
+  background: #fff8eb;
+  color: #7a3d05;
+}
+
+.preflight-result {
+  margin-top: 18px;
+  border: 1px solid #d8dde5;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fbfcfd;
+}
+
+.preflight-signal {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border: 2px solid;
+  border-radius: 8px;
+  padding: 4px 14px;
+  font-size: 1rem;
+}
+
+.preflight-stop {
+  border-color: #b42318;
+  background: #fff4f2;
+  color: #8a2018;
+}
+
+.preflight-hold {
+  border-color: #b54708;
+  background: #fff8eb;
+  color: #7a3d05;
+}
+
+.preflight-go {
+  border-color: #067647;
+  background: #f0fdf4;
+  color: #045c37;
+}
+
+.preflight-result pre {
+  max-height: 460px;
+  margin: 16px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #263445;
+  font: 500 0.92rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
 /* --- Memoria propuesta -------------------------------------------------- */
 
 .memory-list {
