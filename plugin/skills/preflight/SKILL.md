@@ -67,6 +67,10 @@ trabajo por hacer, y una mención suelta no afirma nada.
 
 Ante la duda, no comprobable. Nunca contradicción.
 
+## Registro
+
+Cada corrida se anexa a `~/.rele/preflight-log.jsonl`, fuera del repo analizado. Para desactivarlo, `RELE_NO_LOG=1`; para cambiar la ruta, `RELE_LOG_PATH`.
+
 ## Límites
 
 - Solo comprueba ramas, pull requests, rutas de fichero y commits.

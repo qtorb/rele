@@ -210,13 +210,26 @@ describe('reglas vinculantes', () => {
     expect(globalSignal(verdicts)).not.toBe(PARA)
   })
 
-  it('el reporte solo despliega las contradicciones y resume el resto en una línea', () => {
+  // §5 de F2-W3 derogó §6 de F2-W1 en cuanto a ocultar las sostenidas: ahora se
+  // listan. Lo que NO derogó es que el detalle —comando y cita literal— sea
+  // exclusivo de las contradicciones, y eso es lo que este test conserva.
+  it('las sostenidas se listan sin comando ni cita', () => {
     const text = ['Rama nueva: feat/nueva-cosa.', 'El fichero src/App.tsx ya existe.', 'Quizá feat/otra.'].join('\n')
     const verdicts = analyze(text, { branches: ['feat/nueva-cosa'], paths: ['src/App.tsx'] })
     const report = formatReport(verdicts)
 
     expect(report).toContain('feat/nueva-cosa')
-    expect(report).not.toContain('src/App.tsx existe')
+
+    const receipt = report.split('\n').filter((line) => line.startsWith('- '))
+    expect(receipt).toHaveLength(1)
+    expect(receipt[0]).toContain('src/App.tsx')
+
+    for (const line of receipt) {
+      expect(line).not.toMatch(/\b(git|gh)\b/)
+      expect(line).not.toContain('«')
+      expect(line).not.toContain('»')
+    }
+
     expect(report.trim().endsWith('1 sostenidas · 1 no comprobables')).toBe(true)
   })
 })
@@ -302,5 +315,118 @@ describe('F2-W2 · intención en rutas', () => {
     // Dentro de una sección de alcance, pero afirmando estado: es verificable.
     expect(analyze(text, { paths: [] })[0].bucket).toBe(CONTRADICHA)
     expect(analyze(text, { paths: ['src/rules/validate.ts'] })[0].bucket).toBe(SOSTENIDA)
+  })
+})
+
+describe('F2-W3 · recibo de comprobación', () => {
+  // Frases que afirman ausencia. Ninguna puede aparecer sin su denominador.
+  const ABSENCE_PATTERNS = [
+    /sin contradicciones/i,
+    /no se han? detectado/i,
+    /ninguna contradicha/i,
+    /sin problemas/i,
+    /nada que contradecir/i,
+  ]
+
+  // Frases que afirman sobre el texto en su conjunto. Prohibidas siempre.
+  const WHOLE_TEXT_PATTERNS = [
+    /el brief est[áa] bien/i,
+    /el texto est[áa] bien/i,
+    /todo correcto/i,
+    /todo en orden/i,
+    /puedes seguir/i,
+    /con confianza/i,
+    /aprobado/i,
+  ]
+
+  const LIMPIO = [
+    'Seguimos en la rama `feat/limpia`.',
+    'El PR #7 sigue abierto.',
+    'El fichero `src/App.tsx` ya contiene la lógica.',
+    'Partimos del commit a1b2c3d.',
+  ].join('\n')
+
+  const limpio = () =>
+    analyze(LIMPIO, {
+      branches: ['feat/limpia'],
+      paths: ['src/App.tsx'],
+      commits: ['a1b2c3d'],
+      prs: { 7: { state: 'OPEN', headRefName: 'feat/limpia', baseRefName: 'main' } },
+    })
+
+  it('10 · sin contradicciones, el reporte nombra cada sostenida en su propia línea', () => {
+    const verdicts = limpio()
+    const report = formatReport(verdicts)
+
+    expect(globalSignal(verdicts)).toBe(PUEDE_IR)
+    expect(report).toContain('Sostenidas (4):')
+    expect(report).toContain('- rama feat/limpia existe')
+    expect(report).toContain('- PR #7 abierto contra main')
+    expect(report).toContain('- ruta src/App.tsx existe en HEAD')
+    expect(report).toContain('- commit a1b2c3d existe')
+
+    // Una línea por afirmación, ni más ni menos.
+    const receipt = report.split('\n').filter((line) => line.startsWith('- '))
+    expect(receipt).toHaveLength(4)
+  })
+
+  it('11 · con contradicciones, las sostenidas siguen apareciendo y van después', () => {
+    const text = `${LIMPIO}\nRama nueva: \`feat/ya-existe\`.`
+    const verdicts = analyze(text, {
+      branches: ['feat/limpia', 'feat/ya-existe'],
+      paths: ['src/App.tsx'],
+      commits: ['a1b2c3d'],
+      prs: { 7: { state: 'OPEN', headRefName: 'feat/limpia', baseRefName: 'main' } },
+    })
+    const report = formatReport(verdicts)
+
+    expect(globalSignal(verdicts)).toBe(PARA)
+    expect(report).toContain('Sostenidas (4):')
+    expect(report.indexOf('feat/ya-existe')).toBeLessThan(report.indexOf('Sostenidas ('))
+  })
+
+  it('12 · ninguna frase de ausencia aparece sin su número en la misma línea', () => {
+    const reports = [
+      formatReport(limpio()),
+      formatReport(limpio(), { countLine: 'corridas: 9 · última contradicción: ninguna' }),
+      formatReport(analyze('Rama nueva: `feat/x`.', { branches: ['feat/x'] })),
+      formatReport(analyze('Un texto sobre producto, sin nada verificable.', {})),
+    ]
+
+    for (const report of reports) {
+      for (const line of report.split('\n')) {
+        const declaresAbsence = ABSENCE_PATTERNS.some((pattern) => pattern.test(line))
+        if (declaresAbsence) expect(line).toMatch(/\d/)
+      }
+    }
+  })
+
+  it('13 · cero afirmaciones no usa frase de ausencia y dice que no encontró nada comprobable', () => {
+    const verdicts = analyze('Deberíamos centrarnos en que el producto se entienda a la primera.', {})
+    const report = formatReport(verdicts)
+
+    expect(verdicts).toHaveLength(0)
+    expect(report).toContain('No se ha encontrado en el texto nada que git o gh puedan comprobar.')
+    for (const pattern of ABSENCE_PATTERNS) expect(report).not.toMatch(pattern)
+  })
+
+  it('14 · el reporte nunca afirma nada sobre el texto en su conjunto', () => {
+    const reports = [
+      formatReport(limpio()),
+      formatReport(analyze('Rama nueva: `feat/x`.', { branches: ['feat/x'] })),
+      formatReport(analyze('Un texto sobre producto, sin nada verificable.', {})),
+    ]
+
+    for (const report of reports) {
+      for (const pattern of WHOLE_TEXT_PATTERNS) expect(report).not.toMatch(pattern)
+    }
+  })
+
+  it('la línea de cuenta va al final, y sin ella el reporte sigue siendo válido', () => {
+    const conCuenta = formatReport(limpio(), { countLine: 'corridas: 9 · última contradicción: hace 2 corridas' })
+    const sinCuenta = formatReport(limpio())
+
+    expect(conCuenta.trim().endsWith('corridas: 9 · última contradicción: hace 2 corridas')).toBe(true)
+    expect(sinCuenta).not.toContain('corridas:')
   })
 })

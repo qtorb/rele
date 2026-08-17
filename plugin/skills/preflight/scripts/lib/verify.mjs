@@ -12,6 +12,8 @@ export const SOSTENIDA = 'SOSTENIDA'
 export const CONTRADICHA = 'CONTRADICHA'
 export const NO_COMPROBABLE = 'NO_COMPROBABLE'
 
+const PR_STATE_ES = { OPEN: 'abierto', MERGED: 'fusionado', CLOSED: 'cerrado' }
+
 /** Runner real. Nunca lanza: un fallo es un resultado, no una excepción. */
 export function nodeRunner(cwd = process.cwd()) {
   return (cmd, args) => {
@@ -32,8 +34,13 @@ function display(cmd, args) {
   return [cmd, ...args].join(' ')
 }
 
-function verdict(claim, bucket, repoSays, command) {
-  return { claim, bucket, repoSays, command }
+/**
+ * `fact` es la forma corta para el recibo: solo el hecho comprobado, sin
+ * sujeto ni comando. El detalle largo sigue siendo exclusivo de las
+ * contradicciones.
+ */
+function verdict(claim, bucket, repoSays, command, fact = null) {
+  return { claim, bucket, repoSays, command, fact }
 }
 
 function verifyBranch(claim, { run }) {
@@ -54,19 +61,19 @@ function verifyBranch(claim, { run }) {
   if (claim.assertion === 'create') {
     return exists
       ? verdict(claim, CONTRADICHA, `La rama ${claim.value} ya existe.`, command)
-      : verdict(claim, SOSTENIDA, `La rama ${claim.value} no existe todavía.`, command)
+      : verdict(claim, SOSTENIDA, `La rama ${claim.value} no existe todavía.`, command, 'no existe todavía')
   }
 
   if (claim.assertion === 'exists') {
     return exists
-      ? verdict(claim, SOSTENIDA, `La rama ${claim.value} existe.`, command)
+      ? verdict(claim, SOSTENIDA, `La rama ${claim.value} existe.`, command, 'existe')
       : verdict(claim, CONTRADICHA, `La rama ${claim.value} no existe.`, command)
   }
 
   // Mención suelta: si existe, lo confirmamos. Si no, callamos: nombrar una
   // rama no es afirmar que esté.
   return exists
-    ? verdict(claim, SOSTENIDA, `La rama ${claim.value} existe.`, command)
+    ? verdict(claim, SOSTENIDA, `La rama ${claim.value} existe.`, command, 'existe')
     : verdict(claim, NO_COMPROBABLE, 'La rama se menciona sin afirmar si existe.', command)
 }
 
@@ -100,7 +107,9 @@ function verifyPr(claim, { run, ghAvailable }) {
     return verdict(claim, CONTRADICHA, `El PR #${claim.value} no está abierto (state: ${state}).`, command)
   }
 
-  return verdict(claim, SOSTENIDA, `El PR #${claim.value} existe (state: ${state}).`, command)
+  const estado = PR_STATE_ES[state] ?? state.toLowerCase()
+  const base = data.baseRefName ? ` contra ${data.baseRefName}` : ''
+  return verdict(claim, SOSTENIDA, `El PR #${claim.value} existe (state: ${state}).`, command, `${estado}${base}`)
 }
 
 /**
@@ -129,7 +138,7 @@ function verifyPath(claim, { run, baseRef }) {
 
   const exists = run('git', args).ok
   return exists
-    ? verdict(claim, SOSTENIDA, `${claim.value} existe en ${baseRef}.`, command)
+    ? verdict(claim, SOSTENIDA, `${claim.value} existe en ${baseRef}.`, command, `existe en ${baseRef}`)
     : verdict(claim, CONTRADICHA, `${claim.value} no existe en ${baseRef}.`, command)
 }
 
@@ -137,7 +146,7 @@ function verifyCommit(claim, { run }) {
   const args = ['cat-file', '-e', `${claim.value}^{commit}`]
   const command = display('git', args)
   return run('git', args).ok
-    ? verdict(claim, SOSTENIDA, `El commit ${claim.value} existe.`, command)
+    ? verdict(claim, SOSTENIDA, `El commit ${claim.value} existe.`, command, 'existe')
     : verdict(claim, CONTRADICHA, `El commit ${claim.value} no existe en este repo.`, command)
 }
 
