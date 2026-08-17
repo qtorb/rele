@@ -103,18 +103,31 @@ function verifyPr(claim, { run, ghAvailable }) {
   return verdict(claim, SOSTENIDA, `El PR #${claim.value} existe (state: ${state}).`, command)
 }
 
+/**
+ * Las rutas se leen por intención, igual que las ramas. Solo una ruta que el
+ * texto afirma existente puede contradecir: una que pide crearse describe
+ * trabajo por hacer, y una mención suelta no afirma nada.
+ */
 function verifyPath(claim, { run, baseRef }) {
   const args = ['cat-file', '-e', `${baseRef}:${claim.value}`]
   const command = display('git', args)
-  const exists = run('git', args).ok
 
-  if (claim.assertion === 'create') {
-    return exists
-      ? verdict(claim, CONTRADICHA, `${claim.value} ya existe en ${baseRef}.`, command)
-      : verdict(claim, SOSTENIDA, `${claim.value} no existe todavía en ${baseRef}.`, command)
+  if (claim.pathIntent === 'create') {
+    // Aparcado a propósito: redactar "crea X" cuando X ya existe a medias es
+    // demasiado frecuente para tratarlo como alarma. Podría cambiar; hoy no.
+    return verdict(
+      claim,
+      NO_COMPROBABLE,
+      `El texto pide crear ${claim.value}; no afirma que ya esté.`,
+      command,
+    )
   }
 
-  // Citar una ruta es afirmar que está ahí.
+  if (claim.pathIntent !== 'exists') {
+    return verdict(claim, NO_COMPROBABLE, `${claim.value} se menciona sin afirmar que exista.`, command)
+  }
+
+  const exists = run('git', args).ok
   return exists
     ? verdict(claim, SOSTENIDA, `${claim.value} existe en ${baseRef}.`, command)
     : verdict(claim, CONTRADICHA, `${claim.value} no existe en ${baseRef}.`, command)

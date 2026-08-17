@@ -57,6 +57,16 @@ en un texto de estrategia o de producto.
 Lo que la comprobación no encuentra, no lo menciona. No hay alarma ante lo
 desconocido.
 
+## Propuestas y afirmaciones no son lo mismo
+
+Un brief que dice "crea `src/x.ts`" no está afirmando que `src/x.ts` exista.
+Solo se comprueban las rutas que el texto afirma existentes: las que llevan un
+marcador explícito de estado en la misma frase ("modifica", "ya contiene", "los
+tests pasan"). Una ruta bajo una sección de alcance o entregables se lee como
+trabajo por hacer, y una mención suelta no afirma nada.
+
+Ante la duda, no comprobable. Nunca contradicción.
+
 ## Límites
 
 - Solo comprueba ramas, pull requests, rutas de fichero y commits.

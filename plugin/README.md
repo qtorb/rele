@@ -79,15 +79,29 @@ falta cualquiera de las dos, la afirmación no se reporta ni cuenta para la señ
 
 `Rama nueva: feat/x` y `seguimos en feat/x` afirman cosas distintas sobre el
 mismo token. El plugin lee la línea que contiene el token —no el texto entero,
-que no es prueba— y busca marcas de intención:
+que no es prueba— y busca marcas de intención.
 
-- Si el texto manda **crear** algo que ya existe → contradicción.
-- Si el texto dice que algo **existe** y no está → contradicción.
-- Si solo lo menciona y no está → no comprobable. Nombrar una rama no es afirmar
-  que esté.
+**Ramas**
 
-Las rutas de fichero son la excepción: citar una ruta es afirmar que está ahí,
-así que una ruta ausente sí es contradicción.
+- Manda **crear** algo que ya existe → contradicción.
+- Dice que algo **existe** y no está → contradicción.
+- Solo lo menciona y no está → no comprobable. Nombrar no es afirmar.
+
+**Rutas de fichero**, por este orden:
+
+1. **Marcador explícito de existencia en la misma frase** —"ya está probada",
+   "modifica", "los tests pasan", "ya contiene"— → afirma que existe, y es
+   verificable. Gana siempre, incluso dentro de una sección de alcance.
+2. **Contexto de sección** —alcance, entregables, qué construir— → pide que se
+   cree → no comprobable.
+3. **Nada de lo anterior** → ambiguo → no comprobable.
+
+Una ruta que pide crearse y ya existe **no** es contradicción en esta versión.
+Podría serlo; hoy no, porque redactar "crea X" cuando X existe a medias es
+demasiado frecuente para alarmar. Queda aparcado y escrito.
+
+Verbos como "vive en" no deciden nada por sí solos: describen igual de bien el
+repo de hoy que dónde irá el código mañana. Sin más señal caen en la regla 3.
 
 ## Límites de v1
 

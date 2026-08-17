@@ -69,6 +69,100 @@ const EXISTS_WORDS = ['ya existe', 'existe', 'existente', 'ya hay', 'en la rama'
 const CLOSED_WORDS = ['cerrado', 'cerrada', 'fusionado', 'fusionada', 'merged', 'closed', 'integrado', 'ya se fusionó']
 const OPEN_WORDS = ['abierto', 'abierta', 'open', 'sigue abierto', 'sin fusionar', 'pendiente']
 
+/**
+ * Marcas de que una ruta es trabajo por hacer, no estado del repo.
+ *
+ * "vive en" NO está aquí a propósito: es ambiguo en las dos direcciones y no
+ * decide nada por sí solo. "La lógica vive en x.ts" puede describir el repo de
+ * hoy o especificar dónde irá mañana. Sin más señal, cae en ambiguo.
+ */
+const PATH_CREATE_WORDS = [
+  'nuevo',
+  'nueva',
+  'crea',
+  'crear',
+  'creará',
+  'crearé',
+  'añade',
+  'añadir',
+  'agrega',
+  'agregar',
+  'vivirá',
+  'irá en',
+  'se guarda en',
+  'genera',
+  'generar',
+]
+
+/** Marcas de que la ruta se afirma como existente y por tanto es verificable. */
+const PATH_EXISTS_WORDS = [
+  'ya contiene',
+  'ya está',
+  'ya existe',
+  'ya hay',
+  'contiene',
+  'existe',
+  'modifica',
+  'modificar',
+  'edita',
+  'editar',
+  'actualiza',
+  'actualizar',
+  'corrige',
+  'corregir',
+  'arregla',
+  'arreglar',
+  'borra',
+  'elimina',
+  'renombra',
+  'pasan',
+  'definido en',
+  'implementado en',
+  'está en',
+  'según',
+]
+
+/** Encabezados bajo los cuales una ruta se lee como trabajo por hacer. */
+const SCOPE_HEADING_WORDS = [
+  'alcance',
+  'entrega',
+  'entregable',
+  'objetivo',
+  'qué se hace',
+  'qué se construye',
+  'qué hace',
+  'forma',
+  'arquitectura',
+]
+
+const HEADING_RE = /^\s*(\d+(?:\.\d+)*)\.?\s+(.+)$/
+
+function headingOf(line) {
+  const match = line.match(HEADING_RE)
+  if (!match) return null
+  return { depth: match[1].split('.').length, text: match[2].toLowerCase() }
+}
+
+/**
+ * Tres intenciones para una ruta, y solo la primera puede contradecir.
+ * El orden importa y es vinculante:
+ *
+ *   1. Marcador explícito de existencia en la misma frase → afirma que existe.
+ *      Gana siempre, incluso dentro de una sección de alcance: "el módulo x.ts
+ *      ya contiene la lógica" es una aserción de estado, esté donde esté.
+ *   2. Contexto de sección de alcance o entregables → pide que se cree.
+ *   3. Nada de lo anterior → ambiguo → no comprobable.
+ *
+ * La regla 3 es el desempate: silencio ante lo ambiguo, nunca contradicción.
+ */
+export function detectPathIntent(quote, inScopeSection = false) {
+  const lower = quote.toLowerCase()
+
+  if (includesAny(lower, PATH_EXISTS_WORDS)) return 'exists'
+  if (inScopeSection || includesAny(lower, PATH_CREATE_WORDS)) return 'create'
+  return 'mention'
+}
+
 function includesAny(haystack, needles) {
   return needles.some((needle) => haystack.includes(needle))
 }
@@ -123,6 +217,12 @@ export function extractClaims(text) {
 
   const claims = []
   const seen = new Set()
+  // Cadena de encabezados numerados vigente, para saber bajo qué sección cae
+  // cada línea. Solo se usa para rutas.
+  const headingChain = []
+
+  const inScopeSection = () =>
+    headingChain.some((heading) => heading && includesAny(heading, SCOPE_HEADING_WORDS))
 
   const push = (type, value, quote) => {
     const key = `${type}:${value}`
@@ -139,11 +239,18 @@ export function extractClaims(text) {
       quote: trimmed,
       assertion: detectAssertion(trimmed),
       prState: type === 'pr' ? detectPrState(trimmed) : null,
+      pathIntent: type === 'path' ? detectPathIntent(trimmed, inScopeSection()) : null,
     })
   }
 
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
+
+    const heading = headingOf(line)
+    if (heading) {
+      headingChain.length = heading.depth - 1
+      headingChain[heading.depth - 1] = heading.text
+    }
 
     // 1 · Ramas.
     for (const value of collect(line, BRANCH_RE)) push('branch', value, line)

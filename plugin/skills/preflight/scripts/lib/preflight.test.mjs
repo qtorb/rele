@@ -7,6 +7,10 @@ import { CONTRADICHA, NO_COMPROBABLE, SOSTENIDA, verifyClaims } from './verify.m
 import { PARA, PUEDE_IR, SIN_AFIRMACIONES, formatReport, globalSignal } from './report.mjs'
 
 const FIXTURE_001 = readFileSync(resolve(process.cwd(), 'plugin/fixtures/001-brief-f1-w1.md'), 'utf8')
+const FIXTURE_002 = readFileSync(
+  resolve(process.cwd(), 'plugin/fixtures/002-brief-f1-w1-completo.md'),
+  'utf8',
+)
 
 /** Doble de repo. Ninguna llamada real a git ni a gh. */
 function fakeRepo({ branches = [], paths = [], commits = [], prs = {}, gh = true } = {}) {
@@ -214,5 +218,89 @@ describe('reglas vinculantes', () => {
     expect(report).toContain('feat/nueva-cosa')
     expect(report).not.toContain('src/App.tsx existe')
     expect(report.trim().endsWith('1 sostenidas · 1 no comprobables')).toBe(true)
+  })
+})
+
+describe('F2-W2 · intención en rutas', () => {
+  it('1 · fixture 002 produce PARA con una sola contradicción: la rama', () => {
+    const verdicts = analyze(FIXTURE_002, {
+      branches: ['feat/rele-f1-uxm-app'],
+      paths: [],
+      prs: { 1: { state: 'OPEN', headRefName: 'feat/rele-f0-clickable-mock', baseRefName: 'main' } },
+    })
+
+    const contradicted = verdicts.filter((item) => item.bucket === CONTRADICHA)
+
+    expect(globalSignal(verdicts)).toBe(PARA)
+    expect(contradicted).toHaveLength(1)
+    expect(contradicted[0].claim.type).toBe('branch')
+    expect(contradicted[0].claim.value).toBe('feat/rele-f1-uxm-app')
+
+    // Las dos rutas que el brief mandaba crear caen en no comprobable.
+    for (const path of ['src/extractor/prompt.ts', 'src/rules/validate.ts']) {
+      const verdict = verdicts.find((item) => item.claim.value === path)
+      expect(verdict.bucket).toBe(NO_COMPROBABLE)
+    }
+  })
+
+  it('2 · "modifica" una ruta ausente es contradicción', () => {
+    const verdicts = analyze('Para arreglarlo, modifica `src/App.tsx` y vuelve a lanzar.', { paths: [] })
+
+    expect(verdicts[0].claim.type).toBe('path')
+    expect(verdicts[0].bucket).toBe(CONTRADICHA)
+    expect(formatReport(verdicts)).toContain('git cat-file -e HEAD:src/App.tsx')
+  })
+
+  it('3 · "crea" una ruta ausente no es comprobable', () => {
+    const verdicts = analyze('Crea `src/nuevo.ts` con la lógica de arranque.', { paths: [] })
+
+    expect(verdicts[0].bucket).toBe(NO_COMPROBABLE)
+    expect(globalSignal(verdicts)).not.toBe(PARA)
+  })
+
+  it('4 · "crea" una ruta que ya existe tampoco es comprobable, por ahora', () => {
+    const verdicts = analyze('Crea `src/nuevo.ts` con la lógica de arranque.', { paths: ['src/nuevo.ts'] })
+
+    expect(verdicts[0].bucket).toBe(NO_COMPROBABLE)
+    expect(globalSignal(verdicts)).not.toBe(PARA)
+  })
+
+  it('5 · una ruta mencionada sin verbo ni contexto no es comprobable', () => {
+    const verdicts = analyze('Referencias: `src/suelto.ts`.', { paths: [] })
+
+    expect(verdicts[0].bucket).toBe(NO_COMPROBABLE)
+    expect(globalSignal(verdicts)).not.toBe(PARA)
+  })
+
+  it('6 · una ruta ambigua nunca es contradicción', () => {
+    // "vive en" por sí solo no decide nada: describe igual de bien el repo de
+    // hoy que dónde irá el código mañana.
+    const ambigua = analyze('La lógica vive en `src/ambiguo.ts`.', { paths: [] })
+
+    expect(ambigua[0].bucket).toBe(NO_COMPROBABLE)
+    expect(ambigua[0].bucket).not.toBe(CONTRADICHA)
+    expect(globalSignal(ambigua)).not.toBe(PARA)
+
+    // Lo que decide es el marcador explícito de existencia, no "vive en".
+    const afirmada = analyze('La lógica vive en `src/ambiguo.ts` y ya está probada.', { paths: [] })
+
+    expect(afirmada[0].bucket).toBe(CONTRADICHA)
+  })
+
+  it('una sección de alcance basta para leer la ruta como trabajo por hacer', () => {
+    const text = ['3. ALCANCE', '3.1 Validación', 'Módulo `src/rules/validate.ts`, puro, con tests propios.'].join('\n')
+    const fuera = ['1. ESTADO', 'Módulo `src/rules/validate.ts`, puro, con tests propios.'].join('\n')
+
+    expect(analyze(text, { paths: [] })[0].bucket).toBe(NO_COMPROBABLE)
+    // Fuera de una sección de alcance y sin verbo, sigue siendo una mención.
+    expect(analyze(fuera, { paths: [] })[0].bucket).toBe(NO_COMPROBABLE)
+  })
+
+  it('un marcador de existencia gana al contexto de sección', () => {
+    const text = ['3. ALCANCE', 'El módulo `src/rules/validate.ts` ya contiene la lógica.'].join('\n')
+
+    // Dentro de una sección de alcance, pero afirmando estado: es verificable.
+    expect(analyze(text, { paths: [] })[0].bucket).toBe(CONTRADICHA)
+    expect(analyze(text, { paths: ['src/rules/validate.ts'] })[0].bucket).toBe(SOSTENIDA)
   })
 })
