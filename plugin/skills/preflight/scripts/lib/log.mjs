@@ -17,6 +17,7 @@
 import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
+import { plural } from './report.mjs'
 
 export const DISABLE_ENV = 'RELE_NO_LOG'
 export const PATH_ENV = 'RELE_LOG_PATH'
@@ -124,8 +125,7 @@ function lastContradictionText({ total, lastContradiction }) {
 
   const distance = total - lastContradiction
   if (distance === 0) return 'en la corrida anterior'
-  if (distance === 1) return 'hace 1 corrida'
-  return `hace ${distance} corridas`
+  return `hace ${plural(distance, 'corrida', 'corridas')}`
 }
 
 /**

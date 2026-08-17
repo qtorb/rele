@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { extractClaims } from './claims.mjs'
 import { CONTRADICHA, NO_COMPROBABLE, SOSTENIDA, verifyClaims } from './verify.mjs'
-import { PARA, PUEDE_IR, SIN_AFIRMACIONES, formatReport, globalSignal } from './report.mjs'
+import { PARA, PUEDE_IR, SIN_AFIRMACIONES, formatReport, globalSignal, plural } from './report.mjs'
 
 const FIXTURE_001 = readFileSync(resolve(process.cwd(), 'plugin/fixtures/001-brief-f1-w1.md'), 'utf8')
 const FIXTURE_002 = readFileSync(
@@ -488,6 +488,24 @@ describe('F2-W3 · recibo de comprobación', () => {
     for (const report of reports) {
       for (const pattern of WHOLE_TEXT_PATTERNS) expect(report).not.toMatch(pattern)
     }
+  })
+
+  it('la línea de señal concuerda el número con el sustantivo en 0, 1 y 2', () => {
+    const frase = (n) => plural(n, 'afirmación comprobada', 'afirmaciones comprobadas')
+
+    expect(frase(0)).toBe('0 afirmaciones comprobadas')
+    expect(frase(1)).toBe('1 afirmación comprobada')
+    expect(frase(2)).toBe('2 afirmaciones comprobadas')
+
+    // Y en el reporte, con el artículo concordado también.
+    const una = analyze('El fichero `src/App.tsx` ya existe.', { paths: ['src/App.tsx'] })
+    expect(formatReport(una)).toContain('sin contradicciones en la 1 afirmación comprobada')
+
+    const dos = analyze(
+      ['El fichero `src/App.tsx` ya existe.', 'Seguimos en la rama `feat/dos-cosas`.'].join('\n'),
+      { paths: ['src/App.tsx'], branches: ['feat/dos-cosas'] },
+    )
+    expect(formatReport(dos)).toContain('sin contradicciones en las 2 afirmaciones comprobadas')
   })
 
   it('la línea de cuenta va al final, y sin ella el reporte sigue siendo válido', () => {

@@ -19,6 +19,14 @@ export const SIN_AFIRMACIONES = 'SIN AFIRMACIONES COMPROBABLES'
 const TYPE_LABEL = { branch: 'rama', pr: 'PR', path: 'ruta', commit: 'commit' }
 
 /**
+ * Concuerda un número con su sustantivo. Es el único mecanismo de plural del
+ * plugin: la línea de cuenta del registro también tira de aquí.
+ */
+export function plural(count, singular, many) {
+  return `${count} ${count === 1 ? singular : many}`
+}
+
+/**
  * Señal global, derivada mecánicamente de los cubos.
  * Una NO COMPROBABLE nunca empeora la señal: el silencio ante lo desconocido
  * es la decisión de diseño, no una carencia.
@@ -59,7 +67,9 @@ export function formatReport(verdicts, { countLine = null } = {}) {
 
   // 1 · Señal. La frase de ausencia solo aparece con su denominador al lado.
   if (signal === PUEDE_IR) {
-    lines.push(`${PUEDE_IR} · sin contradicciones en las ${checked} afirmaciones comprobadas`)
+    const articulo = checked === 1 ? 'la' : 'las'
+    const cuantas = plural(checked, 'afirmación comprobada', 'afirmaciones comprobadas')
+    lines.push(`${PUEDE_IR} · sin contradicciones en ${articulo} ${cuantas}`)
   } else {
     lines.push(signal)
   }
