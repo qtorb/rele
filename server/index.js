@@ -17,8 +17,7 @@ import {
   defaultLogPath,
   readStats,
 } from '../plugin/skills/preflight/scripts/lib/log.mjs'
-
-const PLUGIN_VERSION = '0.3.0'
+import { PLUGIN_VERSION } from '../plugin/skills/preflight/scripts/lib/version.mjs'
 
 // La clave vive solo aquí. El frontend nunca la ve.
 dotenv.config({ path: '.env.local' })

@@ -1,0 +1,16 @@
+{
+  "description": "Comprueba contra el repo lo que el mensaje enviado afirma sobre el repo. Informa, nunca bloquea, y calla si no hay nada que decir.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/rele-enganche.mjs\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

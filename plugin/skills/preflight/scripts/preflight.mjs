@@ -16,8 +16,7 @@ import { extractClaims } from './lib/claims.mjs'
 import { nodeRunner, verifyClaims } from './lib/verify.mjs'
 import { PARA, formatReport, globalSignal } from './lib/report.mjs'
 import { appendRun, buildEntry, countLine, defaultLogPath, readStats } from './lib/log.mjs'
-
-const PLUGIN_VERSION = '0.3.0'
+import { PLUGIN_VERSION } from './lib/version.mjs'
 
 function parseArgs(argv) {
   const args = { file: null, base: 'HEAD', repo: process.cwd() }
