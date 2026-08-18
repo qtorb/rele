@@ -743,3 +743,18 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.zona .asiento {
+  margin-bottom: 14px;
+}
+
+.zona .asiento select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #8d9bab;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #1e2632;
+  font: inherit;
+}

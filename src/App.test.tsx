@@ -208,3 +208,79 @@ describe('Relé · tres zonas', () => {
     expect(screen.getByLabelText('Carpeta del proyecto')).toHaveValue(RUTA)
   })
 })
+
+  it('5 · la corrida manda la zona y el asiento elegido', async () => {
+    const espia = mockFetch()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.selectOptions(screen.getByLabelText('Asiento', { selector: '#asiento-escritura' }), 'CTO')
+    await user.type(screen.getByLabelText('Texto de Escritura'), 'Rama nueva: `feat/x`.')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[1])
+
+    await waitFor(() => expect(espia).toHaveBeenCalled())
+    const [, init] = espia.mock.calls[0] as unknown as [string, { body: string }]
+    const cuerpo = JSON.parse(init.body)
+    expect(cuerpo.zone).toBe('escritura')
+    expect(cuerpo.seat).toBe('CTO')
+  })
+
+  it('6 · sin asiento elegido la corrida funciona igual y el campo va vacío', async () => {
+    const espia = mockFetch()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'Repasa el frente.')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[0])
+
+    // Misma señal, sin haber tocado el selector.
+    expect(await screen.findByText(/El repo dice/)).toBeInTheDocument()
+    const [, init] = espia.mock.calls[0] as unknown as [string, { body: string }]
+    expect(JSON.parse(init.body).seat).toBeNull()
+  })
+
+  it('7 · el asiento no sale en el reporte, y cambiarlo no altera la verificación', async () => {
+    const espia = mockFetch()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'Repasa el frente.')
+
+    const selector = screen.getByLabelText('Asiento', { selector: '#asiento-lectura' })
+    await user.selectOptions(selector, 'producto')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[0])
+    const primero = (await screen.findByText(/El repo dice/)).textContent
+
+    await user.selectOptions(selector, 'builder')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[0])
+    await waitFor(() => expect(espia).toHaveBeenCalledTimes(2))
+    const segundo = (await screen.findByText(/El repo dice/)).textContent
+
+    // Mismo texto, distinto asiento: misma verificación palabra por palabra.
+    expect(segundo).toBe(primero)
+
+    // Y el asiento no aparece por ninguna parte del reporte.
+    const reporte = screen.getByText(/El repo dice/).textContent ?? ''
+    for (const asiento of ['producto', 'CTO', 'advisor GTM', 'founder', 'builder']) {
+      expect(reporte).not.toContain(asiento)
+    }
+  })
+
+  it('el asiento se recuerda por zona entre visitas', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<App />)
+
+    await user.selectOptions(screen.getByLabelText('Asiento', { selector: '#asiento-lectura' }), 'founder')
+    await user.selectOptions(screen.getByLabelText('Asiento', { selector: '#asiento-vuelta' }), 'builder')
+
+    unmount()
+    render(<App />)
+
+    expect(screen.getByLabelText('Asiento', { selector: '#asiento-lectura' })).toHaveValue('founder')
+    expect(screen.getByLabelText('Asiento', { selector: '#asiento-vuelta' })).toHaveValue('builder')
+    // La zona que no se tocó sigue sin declarar.
+    expect(screen.getByLabelText('Asiento', { selector: '#asiento-escritura' })).toHaveValue('')
+  })
