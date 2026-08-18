@@ -17,6 +17,7 @@ import { nodeRunner, verifyClaims } from './lib/verify.mjs'
 import { PARA, formatReport, globalSignal } from './lib/report.mjs'
 import { appendRun, buildEntry, countLine, defaultLogPath, readStats } from './lib/log.mjs'
 import { PLUGIN_VERSION } from './lib/version.mjs'
+import { permissionVerdicts } from './lib/permission.mjs'
 
 function parseArgs(argv) {
   const args = { file: null, base: 'HEAD', repo: process.cwd() }
@@ -46,7 +47,10 @@ if (!text.trim()) {
 
 const run = nodeRunner(args.repo)
 const claims = extractClaims(text)
-const verdicts = verifyClaims(claims, { run, text, baseRef: args.base })
+const verdicts = [
+  ...verifyClaims(claims, { run, text, baseRef: args.base }),
+  ...permissionVerdicts(text),
+]
 const signal = globalSignal(verdicts)
 
 // El registro es telemetría. Nada de lo que pase de aquí abajo puede cambiar la

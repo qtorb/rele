@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import { BUDGET_MS, DISABLE_ENV, runHook } from './enganche.mjs'
+import { permissionVerdicts } from '../../skills/preflight/scripts/lib/permission.mjs'
+import { CONTRADICHA } from '../../skills/preflight/scripts/lib/verify.mjs'
 
 /** Doble de repo. Ninguna llamada real a git ni a gh. */
 function fakeRepo({ branches = [], paths = [], gh = true, esRepo = true } = {}) {
@@ -251,5 +253,55 @@ describe('enganche · la entrada real, de punta a punta', () => {
     const salida = execFileSync('node', [entrada], { input: 'esto no es json', encoding: 'utf8' })
 
     expect(salida).toBe('')
+  })
+})
+
+describe('F3-W3b · el gate de permiso por los tres caminos', () => {
+  const READ_ONLY_ROTO = [
+    'ASIENTO REVISOR · READ ONLY · no convierto nada en decisión.',
+    '',
+    'Repasa el frente y devuelve un diagnóstico.',
+    'Crea la rama `feat/ya-existe` y empieza ahí.',
+  ].join('\n')
+
+  it('15 · el enganche coincide con el módulo que usan la app y el comando', () => {
+    const salida = runHook({
+      prompt: READ_ONLY_ROTO,
+      run: fakeRepo({ branches: ['feat/ya-existe'] }),
+      env: {},
+    })
+
+    // El mismo módulo puro que enchufan el comando y el endpoint.
+    const directo = permissionVerdicts(READ_ONLY_ROTO)
+    expect(directo).toHaveLength(1)
+    expect(directo[0].bucket).toBe(CONTRADICHA)
+
+    // Y el enganche lo enseña, con las dos citas.
+    expect(salida).toContain('Y sin embargo:')
+    expect(salida).toContain('se declara READ ONLY')
+    expect(salida).toContain(directo[0].claim.quote)
+    expect(salida).toContain(directo[0].claim.breach)
+  })
+
+  it('16 · texto sin cabecera y sin afirmaciones de repo: silencio absoluto', () => {
+    const sinCabecera = 'Crea la rama que te parezca y sigue con lo tuyo.'
+
+    expect(permissionVerdicts(sinCabecera)).toHaveLength(0)
+    expect(runHook({ prompt: sinCabecera, run: fakeRepo(), env: {} })).toBe('')
+  })
+
+  it('un READ ONLY roto habla aunque no haya ninguna afirmación sobre el repo', () => {
+    const texto = [
+      'REVISIÓN · READ ONLY',
+      '',
+      'Solo se mira y se informa.',
+      'Modifica el fichero de configuración y guarda.',
+    ].join('\n')
+
+    // No hay ramas, PRs, rutas ni commits: la única afirmación es la de permiso.
+    const salida = runHook({ prompt: texto, run: fakeRepo({ esRepo: false }), env: {} })
+
+    expect(salida).toContain('PARA')
+    expect(salida).toContain('se declara READ ONLY')
   })
 })
