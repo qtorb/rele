@@ -113,6 +113,21 @@ export function ZonesPanel() {
     }
   }
 
+  /**
+   * Deja la zona como recién abierta: texto y salida fuera.
+   *
+   * La salida se retira con el texto a propósito. Un reporte visible sin la
+   * pieza que lo produjo parece hablar del momento y habla de algo que ya no
+   * está: es la misma desorientación que motivó retirar las cajas del extractor.
+   *
+   * No toca la ruta, que es compartida, ni el asiento, ni las otras dos zonas.
+   */
+  const limpiar = (zone: ZoneId) => {
+    setTextos((previo) => ({ ...previo, [zone]: '' }))
+    setResultados((previo) => ({ ...previo, [zone]: undefined }))
+    setErrores((previo) => ({ ...previo, [zone]: '' }))
+  }
+
   const comprobar = async (zone: ZoneId) => {
     setComprobando(zone)
     setErrores((previo) => ({ ...previo, [zone]: '' }))
@@ -213,6 +228,9 @@ export function ZonesPanel() {
                   type="button"
                 >
                   {comprobando === zona.id ? 'Comprobando…' : 'Comprobar'}
+                </button>
+                <button className="button button-secondary" onClick={() => limpiar(zona.id)} type="button">
+                  Limpiar
                 </button>
               </div>
 
