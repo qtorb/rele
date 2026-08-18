@@ -16,7 +16,7 @@ export const PARA = 'PARA'
 export const PUEDE_IR = 'PUEDE IR'
 export const SIN_AFIRMACIONES = 'SIN AFIRMACIONES COMPROBABLES'
 
-const TYPE_LABEL = { branch: 'rama', pr: 'PR', path: 'ruta', commit: 'commit' }
+const TYPE_LABEL = { branch: 'rama', pr: 'PR', path: 'ruta', commit: 'commit', permiso: 'permiso' }
 
 /**
  * Concuerda un número con su sustantivo. Es el único mecanismo de plural del
@@ -79,8 +79,15 @@ export function formatReport(verdicts, { countLine = null } = {}) {
   const contradicted = list.filter((item) => item.bucket === CONTRADICHA)
   contradicted.forEach((item, index) => {
     lines.push(`${index + 1}. «${item.claim.quote}»`)
-    lines.push(`   El repo dice: ${item.repoSays}`)
-    lines.push(`   Comprobado con: ${item.command}`)
+    if (item.claim.type === 'permiso') {
+      // El permiso no se prueba con un comando sino con la instrucción
+      // que rompe la cabecera: por eso van las dos citas literales.
+      lines.push(`   Y sin embargo: «${item.claim.breach}»`)
+      lines.push(`   ${item.repoSays}`)
+    } else {
+      lines.push(`   El repo dice: ${item.repoSays}`)
+      lines.push(`   Comprobado con: ${item.command}`)
+    }
     lines.push('')
   })
 

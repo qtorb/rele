@@ -4,41 +4,17 @@ Relé es **memoria operativa para trabajo AI-first**. El repo contiene dos cosas
 
 | | Qué es | Estado |
 |---|---|---|
-| [`plugin/`](plugin/) | **F2 · plugin de Claude Code.** Comprobación previa desde la línea de comandos. Sin configuración. | En desarrollo |
-| `src/`, `server/` | **F3 · la app, con una caja donde pegar.** La misma comprobación, con una carpeta y un botón. Más el Project Pack de F1. | En desarrollo |
+| [`plugin/`](plugin/) | **Plugin de Claude Code.** Comprobación previa por línea de comandos y por enganche automático. Sin configuración. | En desarrollo |
+| `src/`, `server/` | **La app: tres zonas.** Lectura, escritura y vuelta, con la misma comprobación detrás. | En desarrollo |
 
-Decisión del founder, 2026-08-17 13:32: la línea de comandos no es una puerta de
-entrada usable. **La app se descongela** y recibe dentro el mismo código de
-comprobación que usa el plugin. El plugin sigue existiendo y funcionando igual.
-
-**Una sola fuente:** la app importa los módulos del plugin (`claims`, `verify`,
-`report`, `log`) directamente desde `plugin/skills/preflight/scripts/lib/`. No
-hay copia de la lógica de comprobación. Si las dos vías dieran señales
-distintas, sería un fallo, no una diferencia de configuración.
+**Una sola fuente:** la app y el enganche importan los módulos del plugin
+(`claims`, `verify`, `report`, `log`, `permission`) desde
+`plugin/skills/preflight/scripts/lib/`. No hay copia de la lógica de
+comprobación. Si dos vías dieran señales distintas, sería un fallo.
 
 ---
 
-# F2 · plugin de comprobación previa
-
-Un texto llega afirmando cosas sobre el repo: que hay que crear tal rama, que
-tal PR está cerrado, que tal fichero existe. Algunas son falsas, y descubrirlo a
-mitad de la ejecución sale caro. El plugin las comprueba antes.
-
-Instrucciones completas en [`plugin/README.md`](plugin/README.md).
-
-```bash
-claude plugin marketplace add ./
-```
-
-```bash
-claude plugin install rele-preflight@rele
-```
-
-No hay ningún campo que rellenar. De cero a primera señal útil: 3,0 s medidos.
-
----
-
-# F3 · la caja donde pegar
+# La app: tres zonas
 
 ```bash
 npm install
@@ -48,27 +24,36 @@ npm install
 npm run dev
 ```
 
-Frontend en `http://localhost:5173`, backend local en `:8787`. **No hace falta
-ninguna clave para arrancar** — la clave solo entra en juego para el extractor
-LLM del Project Pack, que es opcional.
+Frontend en `http://localhost:5173`, backend en `:8787`. **No hace falta
+ninguna clave para arrancar.**
 
-Arriba del todo hay una caja: la carpeta del proyecto —se recuerda entre
-visitas— y un área donde pegar el brief. El botón `Comprobar` devuelve los
-mismos cuatro bloques que el plugin. Si la carpeta no existe, no es un
-repositorio git o falta `gh`, lo dice en una frase, no con una traza.
+La pantalla sigue el proceso, de izquierda a derecha:
 
-El endpoint es `POST /api/preflight` con `text` y `projectPath`. Escribe en el
-mismo registro que el plugin, marcando la corrida con `origen: "app"`.
+1. **Lectura** — textos que solo miran: encargos READ ONLY, exploraciones, diagnósticos.
+2. **Escritura** — encargos que autorizan tocar código: briefs de WRITE.
+3. **Vuelta** — lo que devuelve el builder: salidas, bloqueos, informes de ejecución.
+
+Arriba, un solo campo con la carpeta del proyecto, compartido por las tres y
+recordado entre visitas. Cada zona tiene su área de texto y su botón
+`Comprobar`, y la salida aparece debajo de la zona desde la que se lanzó.
+
+Las tres ejecutan la misma verificación. La zona no cambia qué se comprueba del
+repositorio: **declara qué permiso se espera**, que es lo que consume el gate
+de permiso.
+
+El endpoint es `POST /api/preflight` con `text`, `projectPath` y `zone`. El
+registro guarda la zona junto al origen.
 
 ---
 
-# F1 · Project Pack, señales y handoff
+# F1 · congelado como referencia
 
-> F1 no coordina todo el sistema. F1 evita que pierdas el siguiente paso.
+El inbox, la salida del extractor y el Project Pack local quedan **congelados
+como referencia F1**: sus ficheros siguen en el árbol y no se editan, pero la
+app dejó de montarlos en F3-W3b. Se recuperan desde el commit `ed9f087`, junto
+con sus tests, que viven sin ejecutarse en `src/App.f1.congelado.tsx`.
 
-Debajo de la caja sigue intacta la pantalla de F1: guarda un Project Pack,
-recibe la última salida del proyecto, la analiza y devuelve una señal visible
-más un handoff copiable.
+Lo que sigue documenta esa pantalla congelada, no la actual.
 
 ## La pantalla
 

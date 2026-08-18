@@ -17,6 +17,7 @@ import { extractClaims } from '../../skills/preflight/scripts/lib/claims.mjs'
 import { CONTRADICHA, verifyClaims } from '../../skills/preflight/scripts/lib/verify.mjs'
 import { counts, formatReport, globalSignal, plural } from '../../skills/preflight/scripts/lib/report.mjs'
 import { buildEntry } from '../../skills/preflight/scripts/lib/log.mjs'
+import { permissionVerdicts } from '../../skills/preflight/scripts/lib/permission.mjs'
 import { PLUGIN_VERSION } from '../../skills/preflight/scripts/lib/version.mjs'
 
 export const BUDGET_MS = 2000
@@ -65,15 +66,23 @@ export function runHook({
     // Barato y sin red: son patrones. Si no hay nada que comprobar, ni
     // siquiera se toca el repositorio.
     const claims = extractClaims(prompt)
-    if (!claims.length) return ''
+    const permisos = permissionVerdicts(prompt)
+    if (!claims.length && !permisos.length) return ''
 
     const deadline = now() + BUDGET_MS
     const guarded = withDeadline(run, now, deadline)
 
-    // Fuera de un repositorio git no hay nada contra qué comprobar.
-    if (!guarded('git', ['rev-parse', '--is-inside-work-tree']).ok) return ''
+    // El gate de permiso no necesita repositorio: solo lee el texto. Las
+    // afirmaciones sobre el repo sí, y fuera de un repo no hay nada contra
+    // qué compararlas.
+    let repoVerdicts = []
+    if (claims.length) {
+      const enRepo = guarded('git', ['rev-parse', '--is-inside-work-tree']).ok
+      if (enRepo) repoVerdicts = verifyClaims(claims, { run: guarded, text: prompt })
+    }
 
-    const verdicts = verifyClaims(claims, { run: guarded, text: prompt })
+    const verdicts = [...repoVerdicts, ...permisos]
+    if (!verdicts.length) return ''
     const { contradichas, sostenidas } = counts(verdicts)
 
     log(

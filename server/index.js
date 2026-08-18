@@ -18,6 +18,7 @@ import {
   readStats,
 } from '../plugin/skills/preflight/scripts/lib/log.mjs'
 import { PLUGIN_VERSION } from '../plugin/skills/preflight/scripts/lib/version.mjs'
+import { permissionVerdicts } from '../plugin/skills/preflight/scripts/lib/permission.mjs'
 
 // La clave vive solo aquí. El frontend nunca la ve.
 dotenv.config({ path: '.env.local' })
@@ -72,7 +73,7 @@ function checkProject(projectPath) {
 }
 
 app.post('/api/preflight', (req, res) => {
-  const { text, projectPath } = req.body ?? {}
+  const { text, projectPath, zone } = req.body ?? {}
 
   if (typeof text !== 'string' || !text.trim()) {
     res.status(400).json({ ok: false, error: 'No hay texto que comprobar.' })
@@ -95,7 +96,10 @@ app.post('/api/preflight', (req, res) => {
   const run = nodeRunner(repo)
 
   try {
-    const verdicts = verifyClaims(extractClaims(text), { run, text, baseRef: 'HEAD' })
+    const verdicts = [
+      ...verifyClaims(extractClaims(text), { run, text, baseRef: 'HEAD' }),
+      ...permissionVerdicts(text, { zone }),
+    ]
     const signal = globalSignal(verdicts)
 
     const logPath = defaultLogPath()
@@ -114,6 +118,7 @@ app.post('/api/preflight', (req, res) => {
         verdicts,
         version: PLUGIN_VERSION,
         origin: 'app',
+        zone: zone ?? null,
       }),
       { path: logPath },
     )
