@@ -24,7 +24,6 @@ const REPORTE = [
 const CONTROLES_RETIRADOS = [
   'Pega aquí lo último',
   'Analizar',
-  'Limpiar',
   'MODO DEMO',
   'Modo demo',
   'Modo real',
@@ -90,9 +89,10 @@ describe('Relé · tres zonas', () => {
     // Un solo campo de ruta, compartido.
     expect(screen.getAllByLabelText('Carpeta del proyecto')).toHaveLength(1)
 
-    // Un botón Comprobar por zona, y ninguno más.
+    // Un Comprobar y un Limpiar por zona, y ninguno más.
     expect(screen.getAllByRole('button', { name: 'Comprobar' })).toHaveLength(3)
-    expect(screen.getAllByRole('button')).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: 'Limpiar' })).toHaveLength(3)
+    expect(screen.getAllByRole('button')).toHaveLength(6)
 
     for (const control of CONTROLES_RETIRADOS) {
       expect(screen.queryByText(control)).toBeNull()
@@ -206,6 +206,100 @@ describe('Relé · tres zonas', () => {
     unmount()
     render(<App />)
     expect(screen.getByLabelText('Carpeta del proyecto')).toHaveValue(RUTA)
+  })
+
+  it('W4 · 1 y 2 · Limpiar vacía el texto y retira la salida de su zona', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'Rama nueva: `feat/x`.')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[0])
+    await screen.findByText(/El repo dice/)
+
+    await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[0])
+
+    expect(screen.getByLabelText('Texto de Lectura')).toHaveValue('')
+    // Ni señal, ni contradicciones, ni sostenidas, ni recuento, ni línea de cuenta.
+    expect(screen.queryByText(/El repo dice/)).toBeNull()
+    expect(screen.queryByText(/Comprobado con/)).toBeNull()
+    expect(screen.queryByText(/Sostenidas/)).toBeNull()
+    expect(screen.queryByText(/no comprobables/)).toBeNull()
+    expect(screen.queryByText(/corridas:/)).toBeNull()
+  })
+
+  it('W4 · 3 · limpiar una zona no toca las otras dos', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'texto de lectura')
+    await user.type(screen.getByLabelText('Texto de Escritura'), 'texto de escritura')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[1])
+    await screen.findByText(/El repo dice/)
+
+    await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[0])
+
+    expect(screen.getByLabelText('Texto de Lectura')).toHaveValue('')
+    expect(screen.getByLabelText('Texto de Escritura')).toHaveValue('texto de escritura')
+    // La salida de escritura sigue donde estaba.
+    expect(screen.getByText(/El repo dice/)).toBeInTheDocument()
+  })
+
+  it('W4 · 4 y 5 · Limpiar conserva la ruta y el asiento', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.selectOptions(screen.getByLabelText('Asiento', { selector: '#asiento-vuelta' }), 'builder')
+    await user.type(screen.getByLabelText('Texto de Vuelta'), 'algo que borrar')
+
+    await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[2])
+
+    expect(screen.getByLabelText('Carpeta del proyecto')).toHaveValue(RUTA)
+    expect(screen.getByLabelText('Asiento', { selector: '#asiento-vuelta' })).toHaveValue('builder')
+    expect(screen.getByLabelText('Texto de Vuelta')).toHaveValue('')
+  })
+
+  it('W4 · 6 · Limpiar no llama al backend, así que no escribe en el registro', async () => {
+    const espia = mockFetch()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'algo')
+    await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[0])
+
+    expect(espia).not.toHaveBeenCalled()
+  })
+
+  it('W4 · 7 · limpiar una zona vacía y sin salida no rompe nada', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    for (const i of [0, 1, 2]) {
+      await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[i])
+      await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[i])
+    }
+
+    expect(screen.getByLabelText('Texto de Lectura')).toHaveValue('')
+    expect(screen.getAllByRole('button', { name: 'Comprobar' })).toHaveLength(3)
+  })
+
+  it('W4 · 8 · comprobar después de limpiar da la misma señal que en frío', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('Carpeta del proyecto'), RUTA)
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'Rama nueva: `feat/x`.')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[0])
+    const enFrio = (await screen.findByText(/El repo dice/)).textContent
+
+    await user.click(screen.getAllByRole('button', { name: 'Limpiar' })[0])
+    await user.type(screen.getByLabelText('Texto de Lectura'), 'Rama nueva: `feat/x`.')
+    await user.click(screen.getAllByRole('button', { name: 'Comprobar' })[0])
+
+    expect((await screen.findByText(/El repo dice/)).textContent).toBe(enFrio)
   })
 })
 
