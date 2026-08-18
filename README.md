@@ -33,6 +33,12 @@ La pantalla sigue el proceso, de izquierda a derecha:
 2. **Escritura** — encargos que autorizan tocar código: briefs de WRITE.
 3. **Vuelta** — lo que devuelve el builder: salidas, bloqueos, informes de ejecución.
 
+Cada zona tiene un **selector de asiento** encima del área de texto: quién
+escribió el texto que se pega —producto, CTO, advisor GTM, 2º advisor
+producto, founder o builder—. Es opcional, no trae valor por defecto y se
+recuerda por zona. Hoy solo se graba en el registro: no aparece en el reporte,
+no altera la señal y no entra en el gate de permiso.
+
 Arriba, un solo campo con la carpeta del proyecto, compartido por las tres y
 recordado entre visitas. Cada zona tiene su área de texto y su botón
 `Comprobar`, y la salida aparece debajo de la zona desde la que se lanzó.

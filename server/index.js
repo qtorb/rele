@@ -73,7 +73,7 @@ function checkProject(projectPath) {
 }
 
 app.post('/api/preflight', (req, res) => {
-  const { text, projectPath, zone } = req.body ?? {}
+  const { text, projectPath, zone, seat } = req.body ?? {}
 
   if (typeof text !== 'string' || !text.trim()) {
     res.status(400).json({ ok: false, error: 'No hay texto que comprobar.' })
@@ -119,6 +119,8 @@ app.post('/api/preflight', (req, res) => {
         version: PLUGIN_VERSION,
         origin: 'app',
         zone: zone ?? null,
+        // El asiento se graba, no se usa: no toca la señal ni el reporte.
+        seat: typeof seat === 'string' && seat.trim() ? seat.trim() : null,
       }),
       { path: logPath },
     )

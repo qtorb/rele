@@ -2,6 +2,21 @@ import { useEffect, useState } from 'react'
 
 const PATH_KEY = 'rele.preflight.ruta'
 
+/** Quién escribió el texto que se pega. Opcional y sin valor por defecto. */
+export const ASIENTOS = [
+  'producto',
+  'CTO',
+  'advisor GTM',
+  '2º advisor producto',
+  'founder',
+  'builder',
+] as const
+
+export type Asiento = (typeof ASIENTOS)[number]
+
+/** Se recuerda por zona: cada una suele recibir de un asiento distinto. */
+const seatKey = (zone: ZoneId) => `rele.asiento.${zone}`
+
 export type ZoneId = 'lectura' | 'escritura' | 'vuelta'
 
 type ZoneSpec = {
@@ -42,6 +57,14 @@ type Resultado = {
   notice: string | null
 }
 
+function loadSeat(zone: ZoneId): string {
+  try {
+    return window.localStorage.getItem(seatKey(zone)) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 function loadPath() {
   try {
     return window.localStorage.getItem(PATH_KEY) ?? ''
@@ -63,6 +86,11 @@ export function ZonesPanel() {
     escritura: '',
     vuelta: '',
   })
+  const [asientos, setAsientos] = useState<Record<ZoneId, string>>(() => ({
+    lectura: loadSeat('lectura'),
+    escritura: loadSeat('escritura'),
+    vuelta: loadSeat('vuelta'),
+  }))
   const [resultados, setResultados] = useState<Partial<Record<ZoneId, Resultado>>>({})
   const [errores, setErrores] = useState<Partial<Record<ZoneId, string>>>({})
   const [comprobando, setComprobando] = useState<ZoneId | null>(null)
@@ -76,6 +104,15 @@ export function ZonesPanel() {
     }
   }, [projectPath])
 
+  const elegirAsiento = (zone: ZoneId, asiento: string) => {
+    setAsientos((previo) => ({ ...previo, [zone]: asiento }))
+    try {
+      window.localStorage.setItem(seatKey(zone), asiento)
+    } catch {
+      // Sin persistencia el asiento sigue vivo en la sesión.
+    }
+  }
+
   const comprobar = async (zone: ZoneId) => {
     setComprobando(zone)
     setErrores((previo) => ({ ...previo, [zone]: '' }))
@@ -85,7 +122,12 @@ export function ZonesPanel() {
       const respuesta = await fetch('/api/preflight', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: textos[zone], projectPath, zone }),
+        body: JSON.stringify({
+          text: textos[zone],
+          projectPath,
+          zone,
+          seat: asientos[zone] || null,
+        }),
       })
       const datos = (await respuesta.json()) as { ok?: boolean; error?: string } & Resultado
 
@@ -133,6 +175,22 @@ export function ZonesPanel() {
             <section className="panel zona" key={zona.id} aria-labelledby={`zona-${zona.id}`}>
               <p className="eyebrow">{zona.titulo}</p>
               <h2 id={`zona-${zona.id}`}>{zona.descripcion}</h2>
+
+              <div className="field asiento">
+                <label htmlFor={`asiento-${zona.id}`}>Asiento</label>
+                <select
+                  id={`asiento-${zona.id}`}
+                  onChange={(event) => elegirAsiento(zona.id, event.target.value)}
+                  value={asientos[zona.id]}
+                >
+                  <option value="">Sin declarar</option>
+                  {ASIENTOS.map((asiento) => (
+                    <option key={asiento} value={asiento}>
+                      {asiento}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               <label className="visually-hidden" htmlFor={`texto-${zona.id}`}>
                 Texto de {zona.titulo}
