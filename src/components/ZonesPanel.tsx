@@ -94,6 +94,11 @@ export function ZonesPanel() {
   const [resultados, setResultados] = useState<Partial<Record<ZoneId, Resultado>>>({})
   const [errores, setErrores] = useState<Partial<Record<ZoneId, string>>>({})
   const [comprobando, setComprobando] = useState<ZoneId | null>(null)
+  const [estado, setEstado] = useState('')
+  const [encargo, setEncargo] = useState('')
+  const [errorEstado, setErrorEstado] = useState('')
+  const [pidiendoEstado, setPidiendoEstado] = useState(false)
+  const [copiado, setCopiado] = useState('')
 
   // La ruta es una sola para las tres zonas, y se recuerda entre visitas.
   useEffect(() => {
@@ -126,6 +131,42 @@ export function ZonesPanel() {
     setTextos((previo) => ({ ...previo, [zone]: '' }))
     setResultados((previo) => ({ ...previo, [zone]: undefined }))
     setErrores((previo) => ({ ...previo, [zone]: '' }))
+  }
+
+  const pedirEstado = async () => {
+    setPidiendoEstado(true)
+    setErrorEstado('')
+    setCopiado('')
+
+    try {
+      const respuesta = await fetch('/api/retomar', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projectPath, encargo: encargo.trim() ? encargo : null }),
+      })
+      const datos = (await respuesta.json()) as { ok?: boolean; error?: string; salida?: string }
+
+      if (!respuesta.ok || !datos.ok || !datos.salida) {
+        setErrorEstado(datos.error ?? 'No he podido leer el estado.')
+        setEstado('')
+        return
+      }
+      setEstado(datos.salida)
+    } catch {
+      setErrorEstado('No encuentro el backend local. Arráncalo con npm run dev.')
+      setEstado('')
+    } finally {
+      setPidiendoEstado(false)
+    }
+  }
+
+  const copiarEstado = async () => {
+    try {
+      await navigator.clipboard.writeText(estado)
+      setCopiado('Copiado.')
+    } catch {
+      setCopiado('El navegador bloqueó el portapapeles. Selecciónalo y cópialo a mano.')
+    }
   }
 
   const comprobar = async (zone: ZoneId) => {
@@ -178,6 +219,61 @@ export function ZonesPanel() {
           rows={1}
           value={projectPath}
         />
+      </div>
+
+      <div className="panel retomar-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Retomar</p>
+            <h2>¿Por dónde iba en este proyecto?</h2>
+          </div>
+          <button
+            className="button button-primary"
+            disabled={!projectPath.trim() || pidiendoEstado}
+            onClick={() => void pedirEstado()}
+            type="button"
+          >
+            {pidiendoEstado ? 'Mirando…' : 'Retomar'}
+          </button>
+        </div>
+
+        <p className="field-hint">
+          Se calcula ahora, no se guarda. Lo comprobado va arriba y lo que alguien dijo, abajo.
+        </p>
+
+        <div className="field">
+          <label htmlFor="encargo">Encargo, si lo tienes a mano</label>
+          <textarea
+            id="encargo"
+            onChange={(event) => setEncargo(event.target.value)}
+            placeholder="Opcional. Se copia literal, sin resumir."
+            rows={3}
+            value={encargo}
+          />
+        </div>
+
+        {errorEstado && (
+          <p className="preflight-error" role="status">
+            {errorEstado}
+          </p>
+        )}
+
+        {estado && (
+          <section className="preflight-result" aria-live="polite">
+            <div className="panel-heading">
+              <p className="field-hint">Estado calculado ahora mismo.</p>
+              <button className="button button-secondary" onClick={() => void copiarEstado()} type="button">
+                Copiar estado
+              </button>
+            </div>
+            <pre>{estado}</pre>
+            {copiado && (
+              <p className="feedback" role="status">
+                {copiado}
+              </p>
+            )}
+          </section>
+        )}
       </div>
 
       <div className="zonas-fila">

@@ -41,7 +41,7 @@ export function loggingDisabled(env = process.env) {
   return normalized !== '' && normalized !== '0' && normalized !== 'false'
 }
 
-export function buildEntry({ date, repo, branch, signal, text, verdicts, version, origin = 'cli', zone = null, seat = null }) {
+export function buildEntry({ date, repo, branch, signal, text, verdicts, version, origin = 'cli', zone = null, seat = null, overOwnOutput = false }) {
   return {
     fecha: date,
     repo,
@@ -53,6 +53,9 @@ export function buildEntry({ date, repo, branch, signal, text, verdicts, version
     zona: zone,
     // Quién escribió el texto. Se graba y nada más: aún no se calcula con él.
     asiento: seat,
+    // Corrida sobre una salida de `retomar`: no es representativa de nada, y
+    // la métrica de F2-W3 debe poder excluirla.
+    sobre_estado: overOwnOutput,
     version_plugin: version,
     texto: text,
     afirmaciones: (verdicts ?? []).map((item) => ({

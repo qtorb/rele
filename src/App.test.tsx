@@ -92,7 +92,15 @@ describe('Relé · tres zonas', () => {
     // Un Comprobar y un Limpiar por zona, y ninguno más.
     expect(screen.getAllByRole('button', { name: 'Comprobar' })).toHaveLength(3)
     expect(screen.getAllByRole('button', { name: 'Limpiar' })).toHaveLength(3)
-    expect(screen.getAllByRole('button')).toHaveLength(6)
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Retomar',
+      'Comprobar',
+      'Limpiar',
+      'Comprobar',
+      'Limpiar',
+      'Comprobar',
+      'Limpiar',
+    ])
 
     for (const control of CONTROLES_RETIRADOS) {
       expect(screen.queryByText(control)).toBeNull()
@@ -140,8 +148,14 @@ describe('Relé · tres zonas', () => {
     ]) {
       expect(container.querySelector(`#${id}`)).toBeNull()
     }
-    // Solo hay cuatro áreas de texto: la ruta y las tres zonas.
-    expect(container.querySelectorAll('textarea')).toHaveLength(4)
+    // Cinco áreas de texto: la ruta, el encargo de Retomar y las tres zonas.
+    expect([...container.querySelectorAll('textarea')].map((t) => t.id)).toEqual([
+      'ruta-proyecto',
+      'encargo',
+      'texto-lectura',
+      'texto-escritura',
+      'texto-vuelta',
+    ])
   })
 
   it('4 · las claves de localStorage de F1 quedan idénticas tras una corrida completa', async () => {

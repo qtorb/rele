@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import express from 'express'
 import dotenv from 'dotenv'
 import { MODEL, extract, hasApiKey } from './extractor.js'
@@ -19,6 +19,7 @@ import {
 } from '../plugin/skills/preflight/scripts/lib/log.mjs'
 import { PLUGIN_VERSION } from '../plugin/skills/preflight/scripts/lib/version.mjs'
 import { permissionVerdicts } from '../plugin/skills/preflight/scripts/lib/permission.mjs'
+import { esSalidaDeEstado, retomar } from '../plugin/skills/preflight/scripts/lib/retomar.mjs'
 
 // La clave vive solo aquí. El frontend nunca la ve.
 dotenv.config({ path: '.env.local' })
@@ -121,6 +122,9 @@ app.post('/api/preflight', (req, res) => {
         zone: zone ?? null,
         // El asiento se graba, no se usa: no toca la señal ni el reporte.
         seat: typeof seat === 'string' && seat.trim() ? seat.trim() : null,
+        // Verificar nuestra propia salida no es representativo: se marca para
+        // que la métrica pueda excluirlo.
+        overOwnOutput: esSalidaDeEstado(text),
       }),
       { path: logPath },
     )
@@ -147,6 +151,49 @@ app.post('/api/preflight', (req, res) => {
   } catch (error) {
     console.error('[rele] preflight falló:', error)
     res.status(500).json({ ok: false, error: 'No he podido completar la comprobación en esa carpeta.' })
+  }
+})
+
+/**
+ * Pedir el estado es una lectura: no escribe en el repositorio ni en el
+ * registro. Llama a la misma función que el comando; aquí no se compone nada.
+ */
+app.post('/api/retomar', (req, res) => {
+  const { projectPath, encargo } = req.body ?? {}
+
+  const repo = normalizeProjectPath(projectPath)
+  if (!repo) {
+    res.status(400).json({ ok: false, error: 'Falta la carpeta del proyecto.' })
+    return
+  }
+  const problema = checkProject(repo)
+  if (problema) {
+    res.status(400).json({ ok: false, error: problema })
+    return
+  }
+
+  try {
+    const resultado = retomar({
+      repoPath: repo,
+      encargo: typeof encargo === 'string' && encargo.trim() ? encargo : null,
+      run: nodeRunner(repo),
+      leerRegistro: () => {
+        try {
+          return readFileSync(defaultLogPath(), 'utf8')
+        } catch {
+          return null
+        }
+      },
+    })
+
+    if (!resultado.ok) {
+      res.status(400).json({ ok: false, error: resultado.error })
+      return
+    }
+    res.json({ ok: true, salida: resultado.salida })
+  } catch (error) {
+    console.error('[rele] retomar falló:', error)
+    res.status(500).json({ ok: false, error: 'No he podido leer el estado de esa carpeta.' })
   }
 })
 
