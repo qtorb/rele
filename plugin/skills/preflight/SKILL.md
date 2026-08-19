@@ -71,6 +71,20 @@ Ante la duda, no comprobable. Nunca contradicción.
 
 Cada corrida se anexa a `~/.rele/preflight-log.jsonl`, fuera del repo analizado. Para desactivarlo, `RELE_NO_LOG=1`; para cambiar la ruta, `RELE_LOG_PATH`.
 
+## Retomar: ¿por dónde iba?
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/skills/preflight/scripts/retomar.mjs" [ruta] [--encargo <fichero>]
+```
+
+Calcula el estado del proyecto ahora mismo y lo enseña en dos bloques: lo comprobado, con la fuente de cada línea, y lo que alguien dijo y nadie ha verificado. No guarda nada, no escribe en el repositorio y no anota la corrida en el registro.
+
+Todo valor que viene de fuera —el encargo, el nombre del directorio, el de la rama, los títulos de PR— se neutraliza con el prefijo `! ` si puede hacerse pasar por una cabecera de bloque o por una marca de encargo.
+
+El bloque comprobado no lleva credenciales, tokens ni URLs con autenticación; el encargo es texto tuyo, va literal entre sus marcas y no se filtra, así que lo que metas ahí es cosa tuya.
+
+De toda la salida, lo único que se puede volver a verificar pegándola es la línea del commit, y la de rama solo si el nombre lleva prefijo. La versión no se verifica.
+
 ## Comprobación automática
 
 Un enganche `UserPromptSubmit` comprueba cada mensaje enviado y solo habla si hay algo que decir; para apagarlo entero, `RELE_NO_HOOK=1`.
